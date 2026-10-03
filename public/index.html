@@ -1,0 +1,1412 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>neural.Lama</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&display=swap">
+<style>
+  html,body{margin:0;height:100%;background:#000;overflow:hidden;}
+  *{box-sizing:border-box;}
+  a{color:#5fd4ff;}
+  a:hover{color:#9fe6ff;}
+  button{font-family:inherit;}
+
+  .stage-outer{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:#000;}
+  .stage{
+    width:1280px;height:720px;flex:none;
+    transform-origin:center;
+    background:#060b12;
+    font-family:'JetBrains Mono',monospace;
+    color:#cfe8f5;
+    display:flex;flex-direction:column;
+    overflow:hidden;
+    position:relative;
+  }
+
+  /* ---------- topbar ---------- */
+  .topbar{display:flex;align-items:center;gap:18px;padding:8px 14px;border-bottom:1px solid #16303f;font-size:10px;letter-spacing:.5px;height:28px;flex:none;}
+  .topbar .brand{font-weight:700;font-size:13px;color:#fff;}
+  .topbar .statusline{color:#5fd4ff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .topbar .stats{margin-left:auto;display:flex;gap:14px;flex:none;}
+  .stat-item{display:flex;flex-direction:column;align-items:flex-end;}
+  .stat-item .k{color:#6f8a99;font-size:8px;white-space:nowrap;}
+  .stat-item .v{color:#fff;font-weight:600;font-size:12px;white-space:nowrap;}
+
+  /* ---------- screen: main ---------- */
+  .screen{flex:1;min-height:0;}
+  [hidden]{display:none !important;}
+  #screen-main{display:flex;}
+
+  .holo-panel{width:760px;position:relative;background:#020407;overflow:hidden;flex:none;}
+  .holo-panel canvas{display:block;width:100%;height:100%;}
+  .holo-fade{position:absolute;inset:0;pointer-events:none;background:linear-gradient(to bottom,rgba(2,4,7,0) 60%,rgba(2,4,7,.9) 100%);}
+  .holo-label{position:absolute;left:16px;top:14px;display:flex;flex-direction:column;gap:3px;font-size:9px;pointer-events:none;}
+  .holo-label .t1{color:#5fd4ff;letter-spacing:1.5px;}
+  .holo-label .t2{color:#6f8a99;}
+  .holo-speech{position:absolute;left:16px;bottom:16px;width:380px;border:1px solid #1f4152;background:rgba(6,11,18,.85);padding:10px 12px;display:flex;flex-direction:column;gap:5px;pointer-events:none;}
+  .holo-speech .tag{color:#4fe0a0;font-size:8.5px;letter-spacing:1px;}
+  .holo-speech .q{color:#e6f3fa;font-size:11px;line-height:1.5;}
+  .holo-actions{position:absolute;right:16px;bottom:16px;display:flex;gap:6px;font-size:9.5px;}
+  .btn{border:1px solid #1f4152;padding:6px 10px;cursor:pointer;background:transparent;color:#cfe8f5;user-select:none;}
+  .btn.cyan{border-color:#5fd4ff;color:#5fd4ff;}
+  .btn.amber{border-color:#f2c46b;color:#f2c46b;}
+  .btn.cyan:hover{background:rgba(95,212,255,.08);}
+  .btn.amber:hover{background:rgba(242,196,107,.08);}
+  .btn:hover{background:#0e2230;}
+
+  .right-col{flex:1;border-left:1px solid #16303f;display:flex;flex-direction:column;min-width:0;}
+  .neural-sec{height:220px;border-bottom:1px solid #16303f;display:flex;flex-direction:column;flex:none;}
+  .sec-head{display:flex;justify-content:space-between;padding:8px 12px 4px;font-size:9px;}
+  .sec-head .lab{color:#5fd4ff;letter-spacing:1px;}
+  .sec-head .sub{color:#6f8a99;}
+  .neural-canvas-wrap{flex:1;position:relative;margin:0 12px;}
+  .neural-canvas-wrap canvas{position:absolute;inset:0;width:100%;height:100%;}
+  .legend-row{display:flex;gap:12px;padding:5px 12px 8px;font-size:8.5px;color:#6f8a99;}
+  .legend-row .sw{margin-right:2px;}
+
+  .crowd-sec{flex:1;display:flex;flex-direction:column;min-height:0;cursor:pointer;outline:1px solid transparent;outline-offset:-1px;}
+  .crowd-sec:hover{outline:1px solid #4fe0a0;background:rgba(79,224,160,.04);}
+  .crowd-canvas-wrap{flex:1;position:relative;margin:0 12px;min-height:0;}
+  .crowd-canvas-wrap canvas{position:absolute;inset:0;width:100%;height:100%;}
+  .legend-dot{display:flex;gap:12px;padding:5px 12px 8px;font-size:8.5px;color:#6f8a99;}
+
+  /* ---------- screen: console ---------- */
+  #screen-console{display:flex;flex-direction:column;min-height:0;}
+  .console-body{flex:1;display:flex;min-height:0;}
+  .graph-area{flex:1;position:relative;min-width:0;}
+  .graph-area canvas{position:absolute;inset:0;width:100%;height:100%;}
+  .ov-topleft{position:absolute;left:14px;top:12px;display:flex;align-items:center;gap:12px;z-index:2;}
+  .ov-caption{font-size:10px;color:#6f8a99;}
+  .scenario-row{position:absolute;left:14px;top:48px;display:flex;gap:10px;z-index:2;}
+  .sc-card{border:1px solid #1f4152;padding:6px 10px;font-size:9px;background:#08121b;cursor:pointer;display:flex;flex-direction:column;gap:2px;}
+  .sc-card .lab{color:#5fd4ff;}
+  .sc-card .nm{color:#fff;font-size:11px;}
+  .sc-card.active{border-color:#4fe0a0;}
+  .sc-card.active .lab{color:#4fe0a0;}
+  .view-tabs{position:absolute;right:12px;top:12px;display:flex;gap:4px;font-size:9px;z-index:2;}
+  .vtab{border:1px solid #1f4152;padding:3px 7px;color:#6f8a99;cursor:pointer;}
+  .vtab.active{border-color:#5fd4ff;color:#5fd4ff;}
+  .ov-legend{position:absolute;left:14px;bottom:10px;display:flex;gap:14px;font-size:9px;color:#6f8a99;}
+  .ov-meta{position:absolute;right:14px;bottom:10px;font-size:9px;color:#6f8a99;}
+
+  .graph-subview{position:absolute;inset:0;z-index:1;background:#060b12;padding:92px 16px 36px;overflow-y:auto;font-size:10px;}
+  .panel-row{border:1px solid #16303f;border-left:2px solid #5fd4ff;padding:7px 10px;margin-bottom:7px;}
+  .panel-row .ph{display:flex;justify-content:space-between;font-size:9px;color:#6f8a99;margin-bottom:3px;}
+  .panel-row .ph b{color:#cfe8f5;}
+  .panel-row .pt{color:#b7cfdc;line-height:1.4;}
+  .dist-row{display:flex;align-items:center;gap:10px;margin-bottom:10px;}
+  .dist-row .lab{width:90px;flex:none;color:#6f8a99;font-size:9.5px;}
+  .dist-row .track{flex:1;height:10px;background:#12283a;position:relative;}
+  .dist-row .fill{position:absolute;left:0;top:0;bottom:0;}
+  .dist-row .pct{width:34px;flex:none;text-align:right;color:#cfe8f5;font-size:10px;}
+  .subview-empty{color:#3d5a6a;font-size:10px;padding-top:20px;}
+
+  .feed-panel{width:320px;border-left:1px solid #16303f;display:flex;flex-direction:column;min-height:0;flex:none;}
+
+  .perintah-box{border-bottom:1px solid #16303f;padding:10px;display:flex;flex-direction:column;gap:6px;flex:none;}
+  .perintah-label{font-size:9px;color:#5fd4ff;letter-spacing:1px;}
+  .perintah-box textarea{background:#08121b;border:1px solid #1f4152;color:#e6f3fa;font:400 10.5px/1.4 'JetBrains Mono',monospace;padding:7px 8px;resize:none;outline:none;}
+  .perintah-box textarea:focus{border-color:#5fd4ff;}
+  .mode-row{display:flex;gap:6px;}
+  .mode-btn{flex:1;text-align:center;border:1px solid #1f4152;padding:5px 0;font-size:9px;letter-spacing:.5px;color:#6f8a99;cursor:pointer;}
+  .mode-btn.active{border-color:#5fd4ff;color:#5fd4ff;}
+  .mode-hint{font-size:8.5px;color:#3d5a6a;line-height:1.4;}
+  .news-toggle{display:flex;align-items:center;gap:6px;font-size:9px;color:#6f8a99;cursor:pointer;}
+  .news-toggle input{accent-color:#5fd4ff;}
+  .news-toggle.disabled{opacity:.4;cursor:default;pointer-events:none;}
+  .vault-box{border:1px solid #1f4152;background:#08121b;max-height:180px;display:flex;flex-direction:column;}
+  .vault-tabs{display:flex;gap:4px;padding:6px 6px 0;flex:none;}
+  .vault-tab{font-size:8.5px;padding:4px 7px;border:1px solid #1f4152;color:#6f8a99;cursor:pointer;}
+  .vault-tab.active{border-color:#5fd4ff;color:#5fd4ff;}
+  .vault-search{margin:6px 6px 0;background:#060b12;border:1px solid #1f4152;color:#e6f3fa;font:400 9.5px 'JetBrains Mono',monospace;padding:5px 7px;outline:none;flex:none;}
+  .vault-search:focus{border-color:#5fd4ff;}
+  .vault-row .snip{color:#6f8a99;font-size:8.5px;margin-left:18px;display:block;}
+  .vault-crumb{font-size:8.5px;color:#3d5a6a;padding:5px 8px 2px;flex:none;}
+  .vault-list{overflow-y:auto;padding:4px 6px 8px;flex:1;min-height:0;}
+  .vault-row{display:flex;align-items:center;gap:6px;padding:3px 4px;font-size:9.5px;color:#b7cfdc;cursor:pointer;}
+  .vault-row:hover{background:#0e2230;}
+  .vault-row .ic{width:12px;flex:none;color:#5fd4ff;}
+  .vault-row.file .ic{color:#4fe0a0;}
+  .vault-empty{color:#3d5a6a;font-size:9px;padding:6px 4px;}
+  .btn.green{border-color:#4fe0a0;color:#4fe0a0;align-self:flex-end;}
+  .btn.green:hover{background:rgba(79,224,160,.08);}
+  .btn[data-busy]{opacity:.5;pointer-events:none;}
+
+  .feed-tabs{display:flex;gap:10px;padding:8px 10px;font-size:9px;border-bottom:1px solid #16303f;}
+  .ftab{color:#6f8a99;cursor:pointer;}
+  .ftab.active{color:#5fd4ff;border-bottom:1px solid #5fd4ff;}
+  .feed-list{flex:1;overflow-y:auto;display:flex;flex-direction:column;gap:9px;padding:10px;min-height:0;}
+  .feed-item{padding:2px 0 2px 8px;font-size:10px;line-height:1.45;border-left:2px solid #5fd4ff;}
+  .feed-item .fh{font-size:8.5px;display:flex;justify-content:space-between;}
+  .feed-item .fh .t{color:#3d5a6a;}
+  .feed-item .fm{color:#b7cfdc;}
+  .feed-subview{flex:1;overflow-y:auto;padding:10px;min-height:0;font-size:10px;}
+  .persona-row{display:flex;align-items:flex-start;gap:8px;padding:6px 0;border-bottom:1px solid #101f2b;}
+  .persona-row .dot{width:7px;height:7px;flex:none;margin-top:4px;border-radius:50%;}
+  .persona-row .code{color:#5fd4ff;font-size:9px;flex:none;width:26px;}
+  .persona-row .info .nm{color:#e6f3fa;font-size:10.5px;}
+  .persona-row .info .ar{color:#6f8a99;font-size:9px;}
+  .sinyal-block{margin-bottom:14px;}
+  .sinyal-block .lab{font-size:8.5px;color:#6f8a99;letter-spacing:1px;margin-bottom:6px;}
+  .log-line{color:#6f8a99;font-size:9.5px;line-height:1.6;white-space:pre-wrap;}
+  .log-line .ts{color:#3d5a6a;}
+  .log-line.ok{color:#4fe0a0;}
+  .log-line.err{color:#ff5a6a;}
+  .feed-foot{padding:8px 10px;border-top:1px solid #16303f;font-size:9px;color:#6f8a99;display:flex;justify-content:space-between;flex:none;}
+  .feed-foot span{cursor:default;}
+  .feed-foot #btn-chat-clear{cursor:pointer;}
+  .feed-foot #btn-chat-clear:hover{color:#5fd4ff;}
+  .feed-item.chip{cursor:pointer;border-left-color:#4fe0a0 !important;}
+  .feed-item.chip:hover{background:#0e2230;}
+  .feed-item.chip .fm{color:#4fe0a0;}
+  .ask-box{border-top:1px solid #16303f;padding:8px 10px;display:flex;flex-direction:column;gap:6px;flex:none;}
+  .ask-box textarea{background:#08121b;border:1px solid #1f4152;color:#e6f3fa;font:400 10px/1.4 'JetBrains Mono',monospace;padding:6px 8px;resize:none;outline:none;}
+  .ask-box textarea:focus{border-color:#5fd4ff;}
+  .ask-box .btn{align-self:flex-end;padding:5px 10px;font-size:9px;}
+  .mic-btn{border-color:#1f4152;color:#6f8a99;padding:6px 10px;font-size:11px;line-height:1;flex:none;}
+  .mic-btn:hover{border-color:#5fd4ff;color:#5fd4ff;}
+  .mic-btn.listening{border-color:#ff5a6a;color:#ff5a6a;background:rgba(255,90,106,.12);animation:mic-pulse 1s infinite;}
+  .mic-btn.unsupported{opacity:.3;cursor:default;pointer-events:none;}
+  @keyframes mic-pulse{0%,100%{opacity:1;}50%{opacity:.4;}}
+
+  .console-bottombar{border-top:1px solid #16303f;display:flex;align-items:flex-end;gap:14px;padding:10px 14px;flex:none;}
+  .spark-block{width:220px;display:flex;flex-direction:column;gap:4px;}
+  .spark-block .lab{font-size:8.5px;color:#6f8a99;}
+  .spark-box{height:36px;border:1px solid #16303f;position:relative;overflow:hidden;}
+  .spark-box canvas{position:absolute;inset:0;width:100%;height:100%;}
+  .console-actions{display:flex;gap:8px;font-size:10px;margin-left:auto;}
+  .console-actions .btn{padding:7px 12px;}
+
+  .kesimpulan-overlay{position:absolute;inset:0;background:rgba(2,6,10,.78);display:flex;align-items:center;justify-content:center;z-index:20;}
+  .kesimpulan-panel{width:640px;max-height:600px;background:#08121b;border:1px solid #1f4152;display:flex;flex-direction:column;}
+  .kesimpulan-head{display:flex;align-items:center;justify-content:space-between;padding:12px 16px;border-bottom:1px solid #16303f;flex:none;}
+  .kesimpulan-head .t{font-size:11px;color:#4fe0a0;letter-spacing:1.5px;font-weight:600;}
+  .kesimpulan-close{cursor:pointer;color:#cfe8f5;font-size:9px;letter-spacing:1px;padding:5px 10px;border:1px solid #1f4152;}
+  .kesimpulan-close:hover{border-color:#4fe0a0;color:#4fe0a0;}
+  .kesimpulan-body{padding:16px;overflow-y:auto;display:flex;flex-direction:column;gap:16px;}
+  .kesimpulan-prompt{font-size:10.5px;color:#6f8a99;line-height:1.5;}
+  .kesimpulan-prompt b{color:#cfe8f5;font-weight:600;}
+
+  .kesimpulan-jalur-row{display:flex;gap:12px;}
+  .kesimpulan-jalur{flex:1;border:1px solid #1f4152;background:#0a1520;padding:12px;display:flex;flex-direction:column;gap:3px;}
+  .kesimpulan-jalur .lab{font-size:8.5px;color:#6f8a99;letter-spacing:1px;}
+  .kesimpulan-jalur .pctbig{font-size:26px;font-weight:700;line-height:1.2;}
+  .kesimpulan-jalur.a .pctbig{color:#4fe0a0;}
+  .kesimpulan-jalur.b .pctbig{color:#f2c46b;}
+  .kesimpulan-jalur .desc{font-size:10px;color:#cfe8f5;}
+  .kesimpulan-jalur .track{height:4px;background:#12283a;margin-top:6px;}
+  .kesimpulan-jalur .fill{height:100%;}
+  .kesimpulan-jalur.a .fill{background:#4fe0a0;}
+  .kesimpulan-jalur.b .fill{background:#f2c46b;}
+
+  .kesimpulan-summary{font-size:11px;line-height:1.65;color:#b7cfdc;}
+  .kesimpulan-summary b{color:#4fe0a0;}
+
+  .kesimpulan-quote{border-left:2px solid #5fd4ff;background:#0d1620;padding:9px 12px;}
+  .kesimpulan-quote .q{color:#e6f3fa;font-size:11.5px;font-style:italic;line-height:1.5;}
+  .kesimpulan-quote .attr{color:#6f8a99;font-size:9px;margin-top:5px;}
+
+  .kesimpulan-rekom .lab{color:#4fe0a0;font-size:9.5px;letter-spacing:1px;font-weight:600;}
+  .kesimpulan-rekom .txt{font-size:12px;line-height:1.7;color:#e6f3fa;margin-top:5px;white-space:pre-line;}
+
+  .kesimpulan-sumber{border-top:1px solid #16303f;padding-top:12px;}
+  .kesimpulan-sumber .lab{color:#6f8a99;font-size:9px;letter-spacing:1px;margin-bottom:6px;}
+  .kesimpulan-sumber .row{display:flex;justify-content:space-between;gap:10px;font-size:10px;padding:3px 0;}
+  .kesimpulan-sumber .k{color:#6f8a99;flex:none;}
+  .kesimpulan-sumber .v{color:#cfe8f5;text-align:right;}
+  .kesimpulan-sumber .v.on{color:#4fe0a0;}
+  .kesimpulan-sumber .v.off{color:#ff8a7a;}
+  .kesimpulan-foot{font-size:8.5px;color:#3d5a6a;letter-spacing:.5px;}
+
+  @media (prefers-reduced-motion:reduce){ * { animation:none !important; } }
+</style>
+</head>
+<body>
+
+<div class="stage-outer">
+  <div class="stage" id="stage">
+
+    <div class="topbar">
+      <span class="brand">neural.Lama</span>
+      <span class="statusline" id="statusline">● NL.OPS-01 · AGEN UTAMA LAMA-01 · LIVE</span>
+      <div class="stats" id="stats-row"></div>
+    </div>
+
+    <!-- SCREEN 1: AGEN UTAMA -->
+    <div class="screen" id="screen-main">
+      <div class="holo-panel">
+        <canvas id="holo-canvas" width="760" height="676"></canvas>
+        <div class="holo-fade"></div>
+        <div class="holo-label">
+          <span class="t1">AGEN UTAMA · LUNA-01</span>
+          <span class="t2" id="holo-model-line">hermes3 · persona: moderator kota</span>
+        </div>
+        <div class="holo-speech">
+          <span class="tag">● BERBICARA KE <span id="speech-pop">108</span> PERSONA</span>
+          <span class="q" id="speech-text">&ldquo;Harga naik 12% minggu ini. Saya ingin dengar dari kalian — apa yang berubah di rumah?&rdquo;</span>
+        </div>
+        <div class="holo-actions">
+          <span class="btn cyan" id="btn-pause-main">❚❚ JEDA</span>
+          <span class="btn amber" id="btn-event-main">EVENT PASAR</span>
+          <span class="btn" id="btn-survey-main">SURVEI</span>
+        </div>
+      </div>
+      <div class="right-col">
+        <div class="neural-sec">
+          <div class="sec-head"><span class="lab">NEURAL · AKTIVITAS MODEL</span><span class="sub" id="neural-sub">42 tok/s · ctx 6.1k / 8k</span></div>
+          <div class="neural-canvas-wrap"><canvas id="neural-canvas" width="496" height="160"></canvas></div>
+          <div class="legend-row">
+            <span><span class="sw" style="color:#5fd4ff;">━</span> ROUTER9</span>
+            <span><span class="sw" style="color:#4fe0a0;">━</span> OLLAMA</span>
+            <span><span class="sw" style="color:#f2c46b;">━</span> PROVIDER LAIN</span>
+            <span><span class="sw" style="color:#ff5a6a;">━</span> SINTESIS</span>
+          </div>
+        </div>
+        <div class="crowd-sec" id="crowd-sec-small">
+          <div class="sec-head"><span class="lab">CROWD · <span id="crowd-count-label">108</span> PERSONA</span><span style="color:#4fe0a0;">KLIK → BUKA KONSOL SIMULASI ↗</span></div>
+          <div class="crowd-canvas-wrap"><canvas id="crowd-small-canvas" width="496" height="380"></canvas></div>
+          <div class="legend-dot">
+            <span><span class="sw" style="color:#5fd4ff;">●</span> AGEN</span>
+            <span><span class="sw" style="color:#f2c46b;">●</span> PENGARUH</span>
+            <span><span class="sw" style="color:#ff5a6a;">●</span> KONFLIK</span>
+            <span><span class="sw" style="color:#4fe0a0;">●</span> METAKOGNISI</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- SCREEN 2: KONSOL SIMULASI -->
+    <div class="screen" id="screen-console" hidden>
+      <div class="console-body">
+        <div class="graph-area">
+          <canvas id="crowd-big-canvas" width="960" height="600"></canvas>
+          <div class="ov-topleft">
+            <span class="btn cyan" id="btn-back">← AGEN UTAMA</span>
+            <span class="ov-caption">PETA PENGARUH · siapa bicara ke siapa · real-time</span>
+          </div>
+          <div class="scenario-row" id="scenario-row"></div>
+          <div class="view-tabs" id="view-tabs">
+            <span class="vtab active" data-tab="graf">GRAF</span>
+            <span class="vtab" data-tab="panel">PANEL</span>
+            <span class="vtab" data-tab="distribusi">DISTRIBUSI</span>
+          </div>
+          <div class="ov-legend">
+            <span><span style="color:#5fd4ff;">●</span> AGEN</span>
+            <span><span style="color:#f2c46b;">●</span> PENGARUH</span>
+            <span><span style="color:#ff5a6a;">●</span> KONFLIK</span>
+            <span><span style="color:#4fe0a0;">●</span> METAKOGNISI</span>
+          </div>
+          <div class="ov-meta" id="ov-meta">T+31 · SENTIMEN +0.42 · RISIKO 0.18</div>
+          <div class="graph-subview" id="panel-view" hidden></div>
+          <div class="graph-subview" id="distribusi-view" hidden></div>
+        </div>
+        <div class="feed-panel">
+          <div class="perintah-box">
+            <span class="perintah-label">PERINTAH UNTUK COUNCIL</span>
+            <textarea id="perintah-input" rows="3" placeholder="Tulis isu atau ide kamu di sini, mis: 'Haruskah kita luncurkan fitur AI generatif untuk pengguna gratis bulan depan?'"></textarea>
+            <div class="mode-row">
+              <span class="mode-btn active" id="mode-quick" data-mode="quick">QUICK · 20</span>
+              <span class="mode-btn" id="mode-full" data-mode="full">FULL · 200</span>
+            </div>
+            <div class="mode-hint" id="mode-hint">20 persona umum, ~3-5 menit di Ollama lokal.</div>
+            <label class="news-toggle" id="news-toggle-label"><input type="checkbox" id="news-toggle"> sertakan berita terbaru (live search)</label>
+            <span class="btn cyan" id="btn-vault-toggle" style="align-self:flex-start;">📁 DATA VAULT</span>
+            <div class="vault-box" id="vault-box" hidden>
+              <div class="vault-tabs">
+                <span class="vault-tab active" data-root="chery">Chery (bisnis)</span>
+                <span class="vault-tab" data-root="hvft">HVFT (Obsidian)</span>
+              </div>
+              <input type="text" id="vault-search-input" class="vault-search" placeholder="🔍 Cari otomatis di vault… (mis: Cilacap, Polreg)">
+              <div class="vault-crumb" id="vault-crumb">/</div>
+              <div class="vault-list" id="vault-list"></div>
+            </div>
+            <div style="display:flex;gap:6px;">
+              <span class="btn mic-btn" id="mic-perintah" title="Ngomong buat isi perintah">🎤</span>
+              <span class="btn green" id="btn-perintah-run" style="flex:1;">▸ JALANKAN COUNCIL</span>
+            </div>
+          </div>
+          <div class="feed-tabs" id="feed-tabs">
+            <span class="ftab active" data-tab="dialog">DIALOG</span>
+            <span class="ftab" data-tab="sinyal">SINYAL</span>
+            <span class="ftab" data-tab="persona">PERSONA</span>
+            <span class="ftab" data-tab="log">LOG</span>
+          </div>
+          <div class="feed-list" id="feed-list"></div>
+          <div class="feed-subview" id="sinyal-view" hidden></div>
+          <div class="feed-subview" id="persona-view" hidden></div>
+          <div class="feed-subview" id="log-view" hidden></div>
+          <div class="ask-box" id="ask-box">
+            <textarea id="ask-input" rows="2" placeholder="Ngobrol sama Luna di sini…"></textarea>
+            <div style="display:flex;gap:6px;align-self:flex-end;">
+              <span class="btn mic-btn" id="mic-ask" title="Ngomong buat isi chat">🎤</span>
+              <span class="btn cyan" id="btn-ask-send">KIRIM</span>
+            </div>
+          </div>
+          <div class="feed-foot"><span id="feed-live-label">● LIVE · hermes3</span><span id="btn-chat-clear">bersihkan obrolan</span></div>
+        </div>
+      </div>
+      <div class="console-bottombar">
+        <div class="spark-block">
+          <span class="lab">SENTIMEN · <span id="spark-count-label">108</span> PERSONA</span>
+          <div class="spark-box"><canvas id="spark-canvas" width="220" height="36"></canvas></div>
+        </div>
+        <div class="console-actions">
+          <span class="btn cyan" id="btn-pause-console">❚❚ JEDA</span>
+          <span class="btn" style="cursor:default;">1×</span>
+          <span class="btn amber" id="btn-event-console">EVENT PASAR</span>
+          <span class="btn" id="btn-survey-console">JALANKAN SURVEI</span>
+          <span class="btn" id="btn-reset">RESET</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="kesimpulan-overlay" id="kesimpulan-overlay" hidden>
+      <div class="kesimpulan-panel">
+        <div class="kesimpulan-head">
+          <span class="t">SINTESIS AKHIR</span>
+          <span style="display:flex;gap:6px;">
+            <span class="kesimpulan-close" id="btn-vault-save">💾 SIMPAN KE OBSIDIAN</span>
+            <span class="kesimpulan-close" id="btn-kesimpulan-close">SELESAI</span>
+          </span>
+        </div>
+        <div class="kesimpulan-body" id="kesimpulan-body"></div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+(function(){
+  "use strict";
+  var reduceMotion = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  // ================= viewport fit =================
+  var stage = document.getElementById("stage");
+  function fit(){
+    var s = Math.min(window.innerWidth/1280, window.innerHeight/720);
+    stage.style.transform = "scale(" + s + ")";
+  }
+  fit();
+  window.addEventListener("resize", fit);
+
+  // ================= gate: rAF loop, ~30fps, pause off-screen =================
+  function gate(cv, draw){
+    var raf = 0, vis = false, alive = true, last = 0;
+    function tick(now){
+      raf = 0;
+      if (!alive || !vis) return;
+      if (now - last >= 33){ last = now; draw(now); }
+      raf = requestAnimationFrame(tick);
+    }
+    var io = new IntersectionObserver(function(entries){
+      vis = entries[0].isIntersecting;
+      if (vis && !raf) raf = requestAnimationFrame(tick);
+    });
+    io.observe(cv);
+    return function(){ alive = false; io.disconnect(); cancelAnimationFrame(raf); };
+  }
+
+  // ================= NL.Holo: particle hologram =================
+  function initHolo(cv, props){
+    var ctx = cv.getContext("2d");
+    var W = props.w, H = props.h, FY = props.fy != null ? props.fy : .22;
+    var ox = 0, iw = W, n = 0, P = null;
+    var t0 = performance.now();
+    var mouse = { x:-999, y:-999 }, glitch = null, stop = function(){};
+    var buf = ctx.createImageData(W,H);
+    var px32 = new Uint32Array(buf.data.buffer);
+    var BG = (255<<24)|(7<<16)|(4<<8)|2;
+
+    var img = new Image();
+    img.onload = function(){
+      // Upscale the (small) source for finer, luminance-weighted sampling —
+      // the original algorithm's fixed-grid sample assumes a large source
+      // photo; ours is smaller, so we bias sample density toward bright
+      // regions instead, keeping the exact same downstream particle format.
+      var workScale = Math.max(1, 480/img.width);
+      var ow = Math.round(img.width*workScale), oh = Math.round(img.height*workScale);
+      var oc = document.createElement("canvas"); oc.width=ow; oc.height=oh;
+      var o = oc.getContext("2d");
+      o.imageSmoothingEnabled = true;
+      o.drawImage(img,0,0,ow,oh);
+      var d = o.getImageData(0,0,ow,oh).data;
+
+      var sc = Math.max(W/ow, H/oh) * (props.zoom||1), ih = oh*sc;
+      var oy = -(ih-H)*FY; iw = ow*sc; ox = (W-iw)/2 + (props.dx||0);
+
+      function sampleAt(px,py){
+        if (px<0||px>=ow||py<0||py>=oh) return null;
+        var i=((py|0)*ow+(px|0))*4;
+        var r=d[i],g=d[i+1],b=d[i+2];
+        return { l:(0.299*r+0.587*g+0.114*b)/255, r:r,g:g,b:b };
+      }
+      // Source has a grey vignette background (brightens toward top/edges),
+      // not black — sample real background points (top strip + side edges,
+      // excluding the bottom third where shoulders sit) and use the
+      // per-channel max as a conservative reference for color-distance exclusion.
+      var bgSamples = [];
+      for (var bx0=0; bx0<ow; bx0+=Math.max(4,(ow/24)|0)) bgSamples.push(sampleAt(bx0,2));
+      for (var by0=0; by0<oh*0.85; by0+=Math.max(4,(oh/24)|0)){ bgSamples.push(sampleAt(2,by0)); bgSamples.push(sampleAt(ow-3,by0)); }
+      var bg = { r:0, g:0, b:0 };
+      bgSamples.forEach(function(c){ if(!c) return; bg.r=Math.max(bg.r,c.r); bg.g=Math.max(bg.g,c.g); bg.b=Math.max(bg.b,c.b); });
+      function saliency(px2){
+        var dr=px2.r-bg.r, dg=px2.g-bg.g, db=px2.b-bg.b;
+        return Math.sqrt(dr*dr+dg*dg+db*db);
+      }
+      var stride=2, totalWeight=0;
+      for (var yy=0; yy<oh; yy+=stride) for (var xx=0; xx<ow; xx+=stride){ var s0=sampleAt(xx,yy); if (s0 && saliency(s0) > 60) totalWeight+=s0.l; }
+      var target = reduceMotion ? 2600 : 11000;
+      var keepFactor = target/(totalWeight||1);
+      var tmp = [];
+      for (var gy=0; gy<oh; gy+=stride){
+        for (var gx=0; gx<ow; gx+=stride){
+          var px2 = sampleAt(gx,gy);
+          if (!px2 || saliency(px2) <= 60) continue;
+          var chance = px2.l*keepFactor;
+          var rep = Math.floor(chance);
+          if (Math.random() < (chance-rep)) rep++;
+          for (var k=0;k<rep;k++){
+            var jx = gx+(Math.random()-0.5)*stride, jy = gy+(Math.random()-0.5)*stride;
+            var bx = jx*sc+ox, by = jy*sc+oy;
+            if (bx<0||bx>W-2||by<0||by>H-2) continue;
+            tmp.push(bx,by, Math.random()*W, Math.random()*H, Math.random()*6.28, px2.r,px2.g,px2.b, Math.random()<.08?2:1);
+          }
+        }
+      }
+      n = tmp.length/9; P = new Float32Array(tmp);
+      stop = gate(cv, draw);
+    };
+    img.src = props.src;
+
+    function draw(now){
+      var t = (now-t0)/1000, k = Math.min(1, t/2.4), e = 1-Math.pow(1-k,3);
+      px32.fill(BG);
+      if (!glitch && !reduceMotion && Math.random() < .012) glitch = { y: Math.random()*H, h: 6+Math.random()*30, dx:(Math.random()-.5)*26, until: t+.12 };
+      if (glitch && t > glitch.until) glitch = null;
+      var breathe = reduceMotion ? 0 : Math.sin(t*1.2)*.006;
+      var lift = reduceMotion ? 0 : (Math.sin(t*1.2)*.5+.5)*1.5;
+      var cx = ox + iw/2 + 6;
+      var scan = (t*90) % (H+80) - 40;
+      var D = buf.data;
+      for (var j=0;j<n;j++){
+        var o = j*9, bx=P[o], by=P[o+1], ph=P[o+4], top = 1-by/H;
+        var x = cx + (bx-cx)*(1+breathe*top) + Math.sin(t*2+ph)*.5;
+        var y = H - (H-by)*1.05 - lift*top + Math.cos(t*1.6+ph)*.5;
+        var dx = x-mouse.x, dy = y-mouse.y, dd = dx*dx+dy*dy;
+        if (dd < 4900){ var dl = Math.sqrt(dd)||1, f=(1-dl/70)*22; x += dx/dl*f; y += dy/dl*f; }
+        if (glitch && y>glitch.y && y<glitch.y+glitch.h) x += glitch.dx;
+        x = P[o+2] + (x-P[o+2])*e; y = P[o+3] + (y-P[o+3])*e;
+        var a = .6+.4*Math.sin(t*3+ph*3), bo = (y>scan && y<scan+40) ? 30 : 0;
+        var r = Math.min(255,P[o+5]*a+bo*.4), g = Math.min(255,P[o+6]*a+bo*.8), b = Math.min(255,P[o+7]*a+bo), s = P[o+8];
+        var xi = x|0, yi = y|0;
+        for (var yy2=0; yy2<=s; yy2++) for (var xx2=0; xx2<=s; xx2++){
+          var X=xi+xx2, Y=yi+yy2; if (X<0||X>=W||Y<0||Y>=H) continue;
+          var q = (Y*W+X)*4;
+          D[q]=Math.max(D[q],r); D[q+1]=Math.max(D[q+1],g); D[q+2]=Math.max(D[q+2],b);
+        }
+      }
+      ctx.putImageData(buf,0,0);
+    }
+    cv.addEventListener("mousemove", function(ev){
+      var r = cv.getBoundingClientRect();
+      mouse = { x:(ev.clientX-r.left)*W/r.width, y:(ev.clientY-r.top)*H/r.height };
+    });
+    cv.addEventListener("mouseleave", function(){ mouse = {x:-999,y:-999}; });
+
+    return {
+      replay: function(){ t0 = performance.now(); }
+    };
+  }
+
+  // ================= NL.Neural: waveform =================
+  function initNeural(cv, props){
+    var ctx = cv.getContext("2d"), W=props.w, H=props.h, t0=performance.now();
+    // Channel 0/1 double as real inter-model activity — pulse() spikes one
+    // when an actual persona response lands, so "ATENSI"/"PENALARAN" aren't
+    // just decorative sine noise while a council run is in flight.
+    var ch = [
+      { c:"#5fd4ff", f:[1.3,3.1,7.7], a:.22, boost:0 },
+      { c:"#4fe0a0", f:[.9,4.3,11],   a:.18, boost:0 },
+      { c:"#f2c46b", f:[.6,2.2,5.3],  a:.2,  boost:0 },
+      { c:"#ff5a6a", f:[2.1,6.4,13],  a:.12, boost:0 }
+    ];
+    function loop(now){
+      var t = (now-t0)/1000;
+      ctx.clearRect(0,0,W,H);
+      ctx.strokeStyle = "#12283a"; ctx.lineWidth = 1;
+      for (var x=0;x<W;x+=24){ ctx.beginPath(); ctx.moveTo(x-(t*30%24),0); ctx.lineTo(x-(t*30%24),H); ctx.stroke(); }
+      for (var y=0;y<=H;y+=H/4){ ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(W,y); ctx.stroke(); }
+      ch.forEach(function(c,i){
+        c.boost *= .92;
+        var base = H*(i+.5)/ch.length;
+        ctx.beginPath(); ctx.strokeStyle=c.c; ctx.lineWidth=1.2; ctx.globalAlpha=Math.min(1,.9+c.boost*.3);
+        for (var xx=0; xx<=W; xx+=2){
+          var u = xx/40 + t*2.2;
+          var v = Math.sin(u*c.f[0])*.5 + Math.sin(u*c.f[1]+i)*.3 + Math.sin(u*c.f[2]+i*2)*.2;
+          var sp = Math.sin(u*.7+i*1.7);
+          if (sp>.97) v += (Math.random()-.5)*3;
+          var yy = base + v*H*c.a*(1+c.boost*2.2);
+          if (xx) ctx.lineTo(xx,yy); else ctx.moveTo(xx,yy);
+        }
+        ctx.stroke(); ctx.globalAlpha=1;
+        var u2 = W/40+t*2.2;
+        var yv = base + (Math.sin(u2*c.f[0])*.5+Math.sin(u2*c.f[1]+i)*.3+Math.sin(u2*c.f[2]+i*2)*.2)*H*c.a*(1+c.boost*2.2);
+        ctx.fillStyle=c.c; ctx.beginPath(); ctx.arc(W-2,yv,c.boost>.1?4:2.5,0,6.28); ctx.fill();
+      });
+    }
+    return { stop: gate(cv, loop), pulse: function(idx){ if (ch[idx]) ch[idx].boost = 1; } };
+  }
+
+  // ================= NL.Crowd: crowd network =================
+  function initCrowd(cv, props){
+    var ctx = cv.getContext("2d"), W=props.w, H=props.h, t0=performance.now();
+    var cents = [[.15,.3],[.3,.72],[.45,.25],[.62,.55],[.8,.28],[.82,.75],[.5,.85],[.22,.1]];
+    var nodes = [], edges = [], pulses = [];
+    // Seeded LCG so the layout is deterministic per rebuild (not per page —
+    // rebuilding with a new count reseeds, giving a fresh-but-stable pattern).
+    function build(total){
+      var s = 17; function r(){ s = (s*16807)%2147483647; return s/2147483647; }
+      total = Math.max(cents.length, total||72);
+      var per = total / cents.length;
+      nodes = [];
+      cents.forEach(function(c, ci){
+        var cx=c[0], cy=c[1];
+        var cnt = Math.max(1, Math.round(per*(0.7+r()*0.6)));
+        for (var i=0;i<cnt;i++){
+          var a=r()*6.28, d=r()*W*.08, k=r();
+          nodes.push({
+            x: cx*W+Math.cos(a)*d, y: 20+cy*(H-40)+Math.sin(a)*d*.7,
+            c: k<.08?"#ff5a6a":k<.2?"#f2c46b":k<.24?"#4fe0a0":"#5fd4ff",
+            ci: ci, g: 0
+          });
+        }
+      });
+      edges = [];
+      nodes.forEach(function(a){
+        var b = nodes[Math.floor(r()*nodes.length)];
+        if (b===a) return;
+        if (b.ci===a.ci || r()<.4){
+          var far = b.ci!==a.ci;
+          edges.push([a,b,{x:(a.x+b.x)/2,y:(a.y+b.y)/2-(far?30:14)},far]);
+        }
+      });
+      pulses = [];
+    }
+    build(props.count);
+    function loop(now){
+      var t = (now-t0)/1000;
+      ctx.clearRect(0,0,W,H);
+      ctx.lineWidth=1;
+      edges.forEach(function(e){
+        var a=e[0],b=e[1],m=e[2],far=e[3];
+        ctx.beginPath(); ctx.moveTo(a.x,a.y); ctx.quadraticCurveTo(m.x,m.y,b.x,b.y);
+        ctx.strokeStyle = far ? "rgba(95,212,255,.5)" : "rgba(159,216,239,.3)";
+        ctx.stroke();
+      });
+      if (!reduceMotion && Math.random()<.25){
+        var e2 = edges[Math.floor(Math.random()*edges.length)];
+        pulses.push({ e:e2, p:0, v:.012+Math.random()*.02, c:e2[0].c });
+      }
+      for (var i=pulses.length-1;i>=0;i--){
+        var q = pulses[i]; q.p += q.v;
+        var a=q.e[0], b=q.e[1];
+        if (q.p>=1){ b.g=1; pulses.splice(i,1); continue; }
+        var m=q.e[2];
+        var u=q.p, v=1-u;
+        var px = v*v*a.x+2*v*u*m.x+u*u*b.x, py = v*v*a.y+2*v*u*m.y+u*u*b.y;
+        ctx.globalAlpha=.35; ctx.fillStyle=q.c; ctx.beginPath(); ctx.arc(px,py,5,0,6.28); ctx.fill();
+        ctx.globalAlpha=1; ctx.beginPath(); ctx.arc(px,py,1.8,0,6.28); ctx.fill();
+      }
+      nodes.forEach(function(nd){
+        nd.g *= .95;
+        var c = nd.g>.3 ? "#f2c46b" : nd.c;
+        if (nd.g>.05){ ctx.globalAlpha=nd.g*.6; ctx.fillStyle=c; ctx.beginPath(); ctx.arc(nd.x,nd.y,10,0,6.28); ctx.fill(); }
+        ctx.globalAlpha = .9+Math.sin(t*2+nd.x)*.1; ctx.fillStyle=c;
+        ctx.beginPath(); ctx.arc(nd.x,nd.y-4,2.6,0,6.28); ctx.fill();
+        ctx.beginPath(); ctx.moveTo(nd.x-4.5,nd.y+5); ctx.quadraticCurveTo(nd.x,nd.y-2.5,nd.x+4.5,nd.y+5); ctx.fill();
+        ctx.globalAlpha=1;
+      });
+    }
+    return {
+      stop: gate(cv, loop),
+      flashRandom: function(){ if (nodes.length) nodes[Math.floor(Math.random()*nodes.length)].g = 1; },
+      setCount: function(n){ build(n); }
+    };
+  }
+
+  // ================= NL.Spark: sentiment sparkline =================
+  function initSpark(cv, props){
+    var ctx = cv.getContext("2d"), W=props.w, H=props.h, pts=[], y=H*.55, t0=0;
+    for (var i=0;i<60;i++){ y = Math.max(4,Math.min(H-4, y+(Math.random()-.55)*6)); pts.push(y); }
+    return gate(cv, function(now){
+      if (now-t0>400){ t0=now; pts.shift(); y = Math.max(4,Math.min(H-4, pts[pts.length-1]+(Math.random()-.52)*6)); pts.push(y); }
+      ctx.clearRect(0,0,W,H);
+      ctx.beginPath(); ctx.moveTo(0,H);
+      pts.forEach(function(p,i){ ctx.lineTo(i*W/(pts.length-1), p); });
+      ctx.lineTo(W,H); ctx.closePath();
+      ctx.fillStyle = "rgba(95,212,255,.15)"; ctx.fill();
+      ctx.beginPath();
+      pts.forEach(function(p,i){ i ? ctx.lineTo(i*W/(pts.length-1),p) : ctx.moveTo(0,p); });
+      ctx.strokeStyle="#5fd4ff"; ctx.lineWidth=1; ctx.stroke();
+    });
+  }
+
+  // ================= app state =================
+  var view = "main";        // 'main' | 'console'
+  var paused = false;
+  var day = 31;
+  var scen = 1;
+  var feed = [];
+  var i = 4;
+  var lunaLive = false;
+  var running = false;
+  var activeFeedTab = "dialog";
+  var activeGraphTab = "graf";
+  var lastPrompt = null, lastResponses = null, lastSynthesis = null, lastNewsUsed = null;
+  var techLog = [];
+  var personaRoster = [];
+  var councilMode = "quick";
+  var MODE_HINTS = {
+    quick: "20 persona umum, ~3-5 menit di Ollama lokal.",
+    full: "200 persona ekonom & pelaku usaha, bisa 45+ menit di Ollama lokal — hasil tetap muncul otomatis begitu selesai."
+  };
+
+  var SCEN_NAMES = ["Harga naik 20%", "Lingkar Dalam", "Kompetitor masuk"];
+  var SCEN_PROMPTS = [
+    "Haruskah kita menaikkan harga 20% bulan ini?",
+    "Bagaimana sebaiknya kita merespons isu yang beredar di lingkar dalam komunitas?",
+    "Bagaimana kita harus bersikap saat kompetitor baru masuk ke pasar ini?"
+  ];
+  var POOL = [
+    { who:"014 Rina Hartono · Guru", c:"#5fd4ff", msg:"Kenaikan harga ini bikin saya ragu belanja di pasar yang biasa. Mungkin pindah ke koperasi." },
+    { who:"027 Budi S. → Agus Wirawan", c:"#4fe0a0", msg:"Kamu dengar soal toko baru di ujung jalan? Katanya lebih murah, tapi saya belum percaya." },
+    { who:"052 Dewi L. · Pedagang", c:"#ff5a6a", msg:"Kalau begini terus, saya harus naikkan harga atau tutup. Pelanggan pasti marah." },
+    { who:"081 Sari M. → Joko P.", c:"#5fd4ff", msg:"Anak saya bilang di sekolah semua orang ngomongin ini. Aneh ya, cepat sekali menyebar." },
+    { who:"090 Yuni A. · Pemuda", c:"#f2c46b", msg:"Saya sudah ajak 5 teman pindah ke koperasi. Kita bikin grup." },
+    { who:"067 Hendra K. · Pekerja", c:"#4fe0a0", msg:"Biasa saja, saya kerja online — tidak terlalu terasa." },
+    { who:"103 Tono B. → Rina H.", c:"#5fd4ff", msg:"Bu Rina, koperasi itu buka jam berapa? Saya mau coba besok." }
+  ];
+  var STANCE_COLOR = { dukung:"#4fe0a0", hati2:"#f2c46b", skeptis:"#ff5a6a", analitis:"#5fd4ff" };
+
+  // ================= DOM refs =================
+  var statusline = document.getElementById("statusline");
+  var statsRow = document.getElementById("stats-row");
+  var screenMain = document.getElementById("screen-main");
+  var screenConsole = document.getElementById("screen-console");
+  var scenarioRow = document.getElementById("scenario-row");
+  var feedList = document.getElementById("feed-list");
+  var ovMeta = document.getElementById("ov-meta");
+  var speechText = document.getElementById("speech-text");
+  var holoModelLine = document.getElementById("holo-model-line");
+  var feedLiveLabel = document.getElementById("feed-live-label");
+  var perintahInput = document.getElementById("perintah-input");
+  var btnPerintahRun = document.getElementById("btn-perintah-run");
+  var modeHintEl = document.getElementById("mode-hint");
+  var vaultBox = document.getElementById("vault-box");
+  var vaultList = document.getElementById("vault-list");
+  var vaultCrumb = document.getElementById("vault-crumb");
+  var vaultRoot = "chery", vaultPath = ".";
+  var kesimpulanOverlay = document.getElementById("kesimpulan-overlay");
+  var kesimpulanBody = document.getElementById("kesimpulan-body");
+  var sinyalView = document.getElementById("sinyal-view");
+  var personaView = document.getElementById("persona-view");
+  var logView = document.getElementById("log-view");
+  var panelView = document.getElementById("panel-view");
+  var distribusiView = document.getElementById("distribusi-view");
+  var askBox = document.getElementById("ask-box");
+  var askInput = document.getElementById("ask-input");
+
+  // ================= canvases boot =================
+  var holo = initHolo(document.getElementById("holo-canvas"), { w:760, h:676, zoom:.72, fy:.12, src:"assets/hologram-agent.jpg" });
+  var neuralGraph = initNeural(document.getElementById("neural-canvas"), { w:496, h:160 });
+  var NEURAL_CHANNEL = { router9:0, ollama:1, groq:2, gemini:2, openrouter:2 };
+  var crowdSmall = initCrowd(document.getElementById("crowd-small-canvas"), { w:496, h:380 });
+  var crowdBig = initCrowd(document.getElementById("crowd-big-canvas"), { w:960, h:600 });
+  initSpark(document.getElementById("spark-canvas"), { w:220, h:36 });
+
+  // ================= render helpers =================
+  function providerMixLabel(){
+    if (!lunaLive) return "LLAMA · 8B";
+    if (!lastResponses || !lastResponses.length) return newsAvailable ? "ROUTER9+OLLAMA" : "OLLAMA · LOKAL";
+    var counts = {};
+    lastResponses.forEach(function(r){ counts[r.provider] = (counts[r.provider]||0)+1; });
+    return Object.keys(counts).map(function(p){ return p.toUpperCase()+" "+counts[p]; }).join(" · ");
+  }
+  function activePersonaCount(){
+    if (lastResponses && lastResponses.length) return lastResponses.length;
+    return councilMode === "full" ? 200 : 20;
+  }
+  function renderStats(){
+    var modelLabel = providerMixLabel();
+    var stats = [
+      { k:"HARI SIMULASI", v: day + " · 214" },
+      { k:"AGEN AKTIF", v: String(activePersonaCount()) },
+      { k:"INTERAKSI", v:(12.3+(i-4)*.1).toFixed(1)+"K" },
+      { k:"KONFLIK", v:"11" },
+      { k:"MODEL", v: modelLabel }
+    ];
+    statsRow.innerHTML = stats.map(function(s){
+      return '<div class="stat-item"><span class="k">'+s.k+'</span><span class="v tab">'+s.v+'</span></div>';
+    }).join("");
+    syncPersonaCountUI();
+  }
+  var lastSyncedCount = null;
+  // Two different numbers on purpose: AGEN AKTIF/BERBICARA KE should be
+  // truthful (who's actually responding), but the crowd network is a visual
+  // density effect — showing literally 20 dots reads as broken/empty, not
+  // "futuristic". Keep it visually full regardless of mode; floor it high,
+  // and let FULL mode's real 200 exceed the floor naturally.
+  function syncPersonaCountUI(){
+    var real = activePersonaCount();
+    var visual = Math.max(real, 140);
+    var speechEl = document.getElementById("speech-pop");
+    if (speechEl) speechEl.textContent = real;
+    [document.getElementById("crowd-count-label"), document.getElementById("spark-count-label")].forEach(function(el){
+      if (el) el.textContent = visual;
+    });
+    if (visual !== lastSyncedCount){
+      lastSyncedCount = visual;
+      if (typeof crowdSmall !== "undefined" && crowdSmall) crowdSmall.setCount(visual);
+      if (typeof crowdBig !== "undefined" && crowdBig) crowdBig.setCount(visual);
+    }
+  }
+  function renderStatusline(){
+    if (view === "main"){
+      statusline.textContent = "● NL.OPS-01 · AGEN UTAMA LAMA-01 · " + (lunaLive ? "LIVE (LOKAL)" : "LIVE");
+    } else {
+      statusline.textContent = "● NL.OPS-01 · KOTA · SKENARIO " + "ABC"[scen] + " · " + SCEN_NAMES[scen].toUpperCase();
+    }
+  }
+  function renderScenarios(){
+    scenarioRow.innerHTML = SCEN_NAMES.map(function(name, k){
+      var active = k === scen;
+      return '<div class="sc-card'+(active?' active':'')+'" data-k="'+k+'"><span class="lab">SKENARIO '+"ABC"[k]+(active?' ●':'')+'</span><span class="nm">'+name+'</span></div>';
+    }).join("");
+    Array.prototype.forEach.call(scenarioRow.querySelectorAll(".sc-card"), function(el){
+      el.addEventListener("click", function(){
+        if (running) return;
+        scen = Number(el.getAttribute("data-k"));
+        renderScenarios(); renderStatusline();
+        runSurvey();
+      });
+    });
+  }
+  function renderFeed(){
+    feedList.innerHTML = feed.slice(0,40).map(function(f, i){
+      return '<div class="feed-item'+(f.chip?' chip':'')+'" data-idx="'+i+'" style="border-left-color:'+f.c+';"><div class="fh"><span style="color:'+f.c+';">'+escapeHtml(f.who)+'</span><span class="t">'+escapeHtml(f.t)+'</span></div><div class="fm">'+escapeHtml(f.msg)+'</div></div>';
+    }).join("");
+    Array.prototype.forEach.call(feedList.querySelectorAll(".feed-item.chip"), function(el){
+      el.addEventListener("click", function(){
+        var f = feed[Number(el.getAttribute("data-idx"))];
+        if (!f || !f.chipValue) return;
+        perintahInput.value = f.chipValue;
+        setFeedTab("dialog");
+        var box = document.querySelector(".perintah-box");
+        if (box) box.scrollIntoView({ block:"nearest" });
+        perintahInput.focus();
+      });
+    });
+  }
+  function escapeHtml(s){
+    return String(s).replace(/[&<>"']/g, function(c){ return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]; });
+  }
+
+  // ================= LOG / SINYAL / PERSONA / PANEL / DISTRIBUSI tabs =================
+  function logEvent(kind, text){
+    techLog.unshift({ kind:kind, text:text, ts:new Date().toLocaleTimeString("id-ID") });
+    techLog = techLog.slice(0,40);
+    if (activeFeedTab === "log") renderLogView();
+  }
+  function renderPersonaView(){
+    if (!personaRoster.length){
+      personaView.innerHTML = '<div class="subview-empty">Memuat daftar persona…</div>';
+      return;
+    }
+    personaView.innerHTML = personaRoster.map(function(p){
+      var color = STANCE_COLOR[p.stance] || "#5fd4ff";
+      return '<div class="persona-row"><span class="dot" style="background:'+color+';"></span><span class="code">'+escapeHtml(p.code)+'</span><div class="info"><div class="nm">'+escapeHtml(p.name)+'</div><div class="ar">'+escapeHtml(p.arch)+'</div></div></div>';
+    }).join("");
+  }
+  function renderSinyalView(){
+    if (!lastSynthesis || !lastSynthesis.tally){
+      sinyalView.innerHTML = '<div class="subview-empty">Belum ada data sinyal — jalankan council dulu.</div>';
+      return;
+    }
+    var pct = lastSynthesis.tally.pct || {};
+    var bars = ["dukung","hati2","skeptis","analitis"].map(function(k){
+      var v = pct[k] || 0;
+      return '<div class="dist-row"><span class="lab">'+STANCE_LABEL[k]+'</span><div class="track"><div class="fill" style="width:'+v+'%;background:'+STANCE_COLOR[k]+';"></div></div><span class="pct">'+v+'%</span></div>';
+    }).join("");
+    sinyalView.innerHTML =
+      '<div class="sinyal-block"><div class="lab">ISU TERAKHIR</div><div style="color:#b7cfdc;font-size:10.5px;line-height:1.5;">"'+escapeHtml(lastPrompt||"")+'"</div></div>' +
+      '<div class="sinyal-block"><div class="lab">SEBARAN SIKAP</div>'+bars+'</div>' +
+      '<div class="sinyal-block"><div class="lab">JALUR</div><div class="dist-row"><span class="lab">Lanjutkan</span><div class="track"><div class="fill" style="width:'+(lastSynthesis.tally.proceedPct||0)+'%;background:#4fe0a0;"></div></div><span class="pct">'+(lastSynthesis.tally.proceedPct||0)+'%</span></div><div class="dist-row"><span class="lab">Tunda</span><div class="track"><div class="fill" style="width:'+(lastSynthesis.tally.holdPct||0)+'%;background:#f2c46b;"></div></div><span class="pct">'+(lastSynthesis.tally.holdPct||0)+'%</span></div></div>';
+  }
+  function renderLogView(){
+    if (!techLog.length){
+      logView.innerHTML = '<div class="subview-empty">Belum ada aktivitas.</div>';
+      return;
+    }
+    logView.innerHTML = techLog.map(function(l){
+      return '<div class="log-line '+l.kind+'"><span class="ts">'+l.ts+'</span> '+escapeHtml(l.text)+'</div>';
+    }).join("");
+  }
+  function renderPanelView(){
+    if (!lastResponses){
+      panelView.innerHTML = '<div class="subview-empty">Belum ada respons — jalankan council dulu.</div>';
+      return;
+    }
+    panelView.innerHTML = lastResponses.map(function(r){
+      var color = STANCE_COLOR[r.stance] || "#5fd4ff";
+      return '<div class="panel-row" style="border-left-color:'+color+';"><div class="ph"><b>'+escapeHtml(r.code+" "+r.name)+'</b><span>'+escapeHtml(r.stance)+' · '+escapeHtml(r.provider||"?")+'</span></div><div class="pt">'+escapeHtml(r.take)+'</div></div>';
+    }).join("");
+  }
+  function renderDistribusiView(){
+    if (!lastSynthesis || !lastSynthesis.tally){
+      distribusiView.innerHTML = '<div class="subview-empty">Belum ada data — jalankan council dulu.</div>';
+      return;
+    }
+    var pct = lastSynthesis.tally.pct || {};
+    distribusiView.innerHTML = ["dukung","hati2","skeptis","analitis"].map(function(k){
+      var v = pct[k] || 0;
+      return '<div class="dist-row"><span class="lab">'+STANCE_LABEL[k]+'</span><div class="track"><div class="fill" style="width:'+v+'%;background:'+STANCE_COLOR[k]+';"></div></div><span class="pct">'+v+'%</span></div>';
+    }).join("");
+  }
+  function setFeedTab(tab){
+    activeFeedTab = tab;
+    Array.prototype.forEach.call(document.querySelectorAll("#feed-tabs .ftab"), function(el){
+      el.classList.toggle("active", el.getAttribute("data-tab") === tab);
+    });
+    feedList.hidden = tab !== "dialog";
+    sinyalView.hidden = tab !== "sinyal";
+    personaView.hidden = tab !== "persona";
+    logView.hidden = tab !== "log";
+    if (tab === "sinyal") renderSinyalView();
+    if (tab === "persona") renderPersonaView();
+    if (tab === "log") renderLogView();
+  }
+  function setGraphTab(tab){
+    activeGraphTab = tab;
+    Array.prototype.forEach.call(document.querySelectorAll("#view-tabs .vtab"), function(el){
+      el.classList.toggle("active", el.getAttribute("data-tab") === tab);
+    });
+    panelView.hidden = tab !== "panel";
+    distribusiView.hidden = tab !== "distribusi";
+    if (tab === "panel") renderPanelView();
+    if (tab === "distribusi") renderDistribusiView();
+  }
+
+  function renderMeta(){
+    ovMeta.textContent = "T+" + day + " · SENTIMEN +0.42 · RISIKO 0.18";
+  }
+  function renderPauseButtons(){
+    var label = paused ? "▶ LANJUT" : "❚❚ JEDA";
+    document.getElementById("btn-pause-main").textContent = label;
+    document.getElementById("btn-pause-console").textContent = label;
+  }
+
+  function setView(next){
+    view = next;
+    screenMain.hidden = next !== "main";
+    screenConsole.hidden = next !== "console";
+    if (next === "main") holo.replay();
+    renderStatusline();
+  }
+
+  // ================= ambient feed ticking (mock "city" chatter, OFFLINE fallback only) =================
+  // Once Luna is actually live, fake city gossip has nothing to do with
+  // whatever real issue was just discussed — it only confuses the feed.
+  // This only runs while the backend is unreachable, as an illustrative demo.
+  var tickTimer = null;
+  function startTicking(){
+    if (tickTimer || lunaLive) return;
+    tickTimer = setInterval(function(){
+      if (paused || running || lunaLive) return;
+      var p = POOL[i % POOL.length];
+      if (i % 3 === 0) day++;
+      feed = [{ who:p.who, t:"T+"+day, c:p.c, msg:p.msg }].concat(feed).slice(0,40);
+      i++;
+      renderFeed(); renderStats(); renderMeta();
+    }, 2600);
+  }
+  function stopTicking(){
+    if (tickTimer){ clearInterval(tickTimer); tickTimer = null; }
+  }
+  (function seedFeed(){
+    feed = POOL.slice(0,4).map(function(p,k){ return { who:p.who, t:"T+"+(31-k), c:p.c, msg:p.msg }; });
+    renderFeed();
+  })();
+
+  // ================= Luna backend connection =================
+  var newsAvailable = false;
+  function checkLunaHealth(){
+    return fetch("/api/health").then(function(res){ return res.json(); })
+      .then(function(data){
+        lunaLive = Boolean(data && data.ok);
+        newsAvailable = Boolean(data && data.configuredProviders && data.configuredProviders.indexOf("router9") !== -1);
+      })
+      .catch(function(){ lunaLive = false; })
+      .then(function(){
+        renderStats(); renderStatusline();
+        var newsToggle = document.getElementById("news-toggle");
+        var newsLabel = document.getElementById("news-toggle-label");
+        if (newsToggle){ newsToggle.disabled = !newsAvailable; }
+        if (newsLabel){ newsLabel.classList.toggle("disabled", !newsAvailable); newsLabel.title = newsAvailable ? "" : "Butuh 9Router aktif (ROUTER9_API_KEY di .env)"; }
+        if (lunaLive){
+          stopTicking();
+          feed = [{ who:"LUNA", t:"T+"+day, c:"#4fe0a0", msg:"Terhubung ke server lokal. Tulis isu di PERINTAH UNTUK COUNCIL atau pilih SKENARIO untuk mulai." }];
+          renderFeed();
+          logEvent("ok", "Terhubung ke Luna — provider: ollama (hermes3).");
+          fetchPersonaRoster();
+          fetchLastRun();
+          fetchChatHistory();
+        } else {
+          logEvent("err", "Server Luna tidak terjangkau — mode simulasi/offline.");
+          startTicking();
+        }
+      });
+  }
+  function fetchChatHistory(){
+    return fetch("/api/chat/history").then(function(res){ return res.json(); })
+      .then(function(data){
+        if (!data || !data.ok || !data.history || !data.history.length) return;
+        var items = data.history.slice(-20).map(function(h){
+          return { who: h.role === "user" ? "KAMU" : "LUNA", t: h.ts ? new Date(h.ts).toLocaleTimeString("id-ID").slice(0,5) : "", c: h.role === "user" ? "#5fd4ff" : "#4fe0a0", msg: h.content };
+        });
+        items.reverse();
+        feed = items.concat(feed).slice(0,40);
+        renderFeed();
+      })
+      .catch(function(){});
+  }
+  function fetchLastRun(){
+    return fetch("/api/council/last").then(function(res){ return res.ok ? res.json() : null; })
+      .then(function(data){
+        if (!data || !data.ok) return;
+        lastPrompt = data.prompt; lastResponses = data.responses; lastSynthesis = data.synthesis; lastNewsUsed = data.newsUsed;
+        var when = data.completedAt ? new Date(data.completedAt).toLocaleTimeString("id-ID") : "";
+        feed = [{ who:"LUNA", t:"T+"+day, c:"#5fd4ff", msg:"Hasil council terakhir dipulihkan (selesai "+when+"): “"+data.prompt+"”. Lihat SINTESIS AKHIR yang baru dibuka." }].concat(feed).slice(0,40);
+        renderFeed();
+        renderStats();
+        showKesimpulan(data.prompt, data.synthesis, data.responses, data.newsUsed);
+        logEvent("ok", "Hasil run terakhir dipulihkan dari disk (selesai "+when+").");
+      })
+      .catch(function(){});
+  }
+  function fetchPersonaRoster(){
+    return fetch("/api/personas?mode="+councilMode).then(function(res){ return res.json(); })
+      .then(function(data){
+        if (data && data.ok) personaRoster = data.personas;
+        if (activeFeedTab === "persona") renderPersonaView();
+      })
+      .catch(function(){});
+  }
+
+  // ================= Data Vault browser (read from + write back to the real vault) =================
+  function loadVaultDir(root, relPath){
+    vaultRoot = root; vaultPath = relPath || ".";
+    vaultList.innerHTML = '<div class="vault-empty">Memuat…</div>';
+    vaultCrumb.textContent = "/" + (vaultPath === "." ? "" : vaultPath);
+    fetch("/api/vault/list?root="+encodeURIComponent(root)+"&path="+encodeURIComponent(vaultPath))
+      .then(function(res){ return res.json(); })
+      .then(function(data){
+        if (!data.ok) { vaultList.innerHTML = '<div class="vault-empty">'+escapeHtml(data.error||"gagal")+'</div>'; return; }
+        var rows = [];
+        if (vaultPath !== "."){
+          var parent = vaultPath.split("/").slice(0,-1).join("/") || ".";
+          rows.push('<div class="vault-row" data-nav="'+escapeHtml(parent)+'"><span class="ic">↑</span>..</div>');
+        }
+        data.entries.forEach(function(e){
+          if (e.isDir){
+            rows.push('<div class="vault-row" data-nav="'+escapeHtml(e.relPath)+'"><span class="ic">📁</span>'+escapeHtml(e.name)+'</div>');
+          } else {
+            rows.push('<div class="vault-row file" data-file="'+escapeHtml(e.relPath)+'"><span class="ic">·</span>'+escapeHtml(e.name)+'</div>');
+          }
+        });
+        vaultList.innerHTML = rows.length ? rows.join("") : '<div class="vault-empty">Kosong.</div>';
+        Array.prototype.forEach.call(vaultList.querySelectorAll("[data-nav]"), function(el){
+          el.addEventListener("click", function(){ loadVaultDir(vaultRoot, el.getAttribute("data-nav")); });
+        });
+        Array.prototype.forEach.call(vaultList.querySelectorAll("[data-file]"), function(el){
+          el.addEventListener("click", function(){ injectVaultFile(vaultRoot, el.getAttribute("data-file")); });
+        });
+      })
+      .catch(function(){ vaultList.innerHTML = '<div class="vault-empty">Gagal memuat.</div>'; });
+  }
+  function injectVaultFile(root, relPath){
+    vaultList.innerHTML = '<div class="vault-empty">Membaca file…</div>';
+    fetch("/api/vault/read?root="+encodeURIComponent(root)+"&path="+encodeURIComponent(relPath))
+      .then(function(res){ return res.json(); })
+      .then(function(data){
+        if (!data.ok){ vaultList.innerHTML = '<div class="vault-empty">'+escapeHtml(data.error||"gagal baca")+'</div>'; return; }
+        var header = "[DATA dari "+root+"/"+relPath+"]\n";
+        var existing = perintahInput.value.trim();
+        perintahInput.value = (existing ? existing+"\n\n" : "") + header + data.content;
+        vaultBox.hidden = true;
+        logEvent("ok", "Data dimasukkan dari vault: "+root+"/"+relPath);
+      })
+      .catch(function(){ vaultList.innerHTML = '<div class="vault-empty">Gagal baca file.</div>'; });
+  }
+  var vaultSearchTimer = null;
+  function runVaultSearch(q){
+    vaultList.innerHTML = '<div class="vault-empty">Mencari…</div>';
+    vaultCrumb.textContent = "Hasil pencarian: “"+q+"” (semua root)";
+    fetch("/api/vault/search?q="+encodeURIComponent(q))
+      .then(function(res){ return res.json(); })
+      .then(function(data){
+        if (!data.ok){ vaultList.innerHTML = '<div class="vault-empty">'+escapeHtml(data.error||"gagal")+'</div>'; return; }
+        if (!data.results.length){ vaultList.innerHTML = '<div class="vault-empty">Nggak ketemu. Coba kata kunci lain.</div>'; return; }
+        vaultList.innerHTML = data.results.map(function(r, idx){
+          var snip = r.snippet ? '<span class="snip">'+escapeHtml(r.snippet)+'</span>' : "";
+          return '<div class="vault-row file" data-search-idx="'+idx+'"><span class="ic">·</span>['+escapeHtml(r.root)+'] '+escapeHtml(r.relPath)+snip+'</div>';
+        }).join("");
+        Array.prototype.forEach.call(vaultList.querySelectorAll("[data-search-idx]"), function(el){
+          el.addEventListener("click", function(){
+            var r = data.results[Number(el.getAttribute("data-search-idx"))];
+            injectVaultFile(r.root, r.relPath);
+          });
+        });
+      })
+      .catch(function(){ vaultList.innerHTML = '<div class="vault-empty">Pencarian gagal.</div>'; });
+  }
+
+  var STANCE_LABEL = { dukung:"DUKUNG", hati2:"HATI-HATI", skeptis:"SKEPTIS", analitis:"ANALITIS" };
+
+  function setBusy(busy){
+    if (busy){
+      document.getElementById("btn-survey-console").setAttribute("data-busy","1");
+      btnPerintahRun.setAttribute("data-busy","1");
+    } else {
+      document.getElementById("btn-survey-console").removeAttribute("data-busy");
+      btnPerintahRun.removeAttribute("data-busy");
+    }
+  }
+
+  function showKesimpulan(promptText, synthesis, responses, newsUsed){
+    var tally = synthesis.tally || { pct:{}, proceedPct:0, holdPct:0 };
+    responses = responses || [];
+    var pct = tally.pct || {};
+
+    var provCounts = {};
+    responses.forEach(function(r){ provCounts[r.provider] = (provCounts[r.provider]||0)+1; });
+    var provLine = Object.keys(provCounts).length
+      ? Object.keys(provCounts).map(function(p){ return p.toUpperCase()+" ("+provCounts[p]+")"; }).join(", ")
+      : "—";
+    var sumberHtml =
+      '<div class="kesimpulan-sumber">' +
+        '<div class="lab">SUMBER YANG DIPAKAI</div>' +
+        '<div class="row"><span class="k">Model persona</span><span class="v">'+escapeHtml(provLine)+'</span></div>' +
+        '<div class="row"><span class="k">Sintesis</span><span class="v">'+escapeHtml((synthesis.simulated ? "fallback (tanpa provider)" : (synthesis.provider||"?").toUpperCase()))+'</span></div>' +
+        '<div class="row"><span class="k">Berita live</span><span class="v '+(newsUsed?"on":"off")+'">'+(newsUsed ? "✓ dipakai" : "✕ tidak dipakai (centang “sertakan berita terbaru” sebelum jalan)")+'</span></div>' +
+        '<div class="row"><span class="k">Data Obsidian/vault</span><span class="v off">✕ belum terhubung — masih manual paste ke PERINTAH</span></div>' +
+      '</div>';
+
+    var support = responses.filter(function(r){ return r.stance === "dukung"; })[0] || responses[0];
+    var counter = responses.filter(function(r){ return r.stance === "skeptis" || r.stance === "hati2"; })[0] || responses[1];
+    function quoteCard(r){
+      if (!r) return "";
+      return '<div class="kesimpulan-quote"><div class="q">“'+escapeHtml(r.take)+'”</div><div class="attr">'+escapeHtml(r.code)+' — '+escapeHtml(r.name)+(r.arch ? ", "+escapeHtml(r.arch) : "")+'</div></div>';
+    }
+
+    var summary = (tally.total||responses.length)+' agent merespons — <b>'+(pct.dukung||0)+'%</b> condong mendukung, <b>'+(pct.hati2||0)+'%</b> menyarankan hati-hati, <b>'+(pct.skeptis||0)+'%</b> skeptis, dan <b>'+(pct.analitis||0)+'%</b> menahan diri untuk data lebih lanjut.';
+
+    kesimpulanBody.innerHTML =
+      '<div class="kesimpulan-prompt"><b>Prompt:</b> "'+escapeHtml(promptText)+'"</div>' +
+      '<div class="kesimpulan-jalur-row">' +
+        '<div class="kesimpulan-jalur a"><span class="lab">JALUR A</span><span class="pctbig">'+(tally.proceedPct||0)+'%</span><span class="desc">Lanjutkan sekarang</span><div class="track"><div class="fill" style="width:'+(tally.proceedPct||0)+'%;"></div></div></div>' +
+        '<div class="kesimpulan-jalur b"><span class="lab">JALUR B</span><span class="pctbig">'+(tally.holdPct||0)+'%</span><span class="desc">Tunda &amp; kaji ulang</span><div class="track"><div class="fill" style="width:'+(tally.holdPct||0)+'%;"></div></div></div>' +
+      '</div>' +
+      '<div class="kesimpulan-summary">'+summary+'</div>' +
+      quoteCard(support) + quoteCard(counter) +
+      '<div class="kesimpulan-rekom"><div class="lab">REKOMENDASI COUNCIL</div><div class="txt">'+escapeHtml(synthesis.text)+'</div></div>' +
+      sumberHtml +
+      '<div class="kesimpulan-foot">'+(synthesis.simulated ? "sintesis simulasi (tanpa provider)" : "sintesis "+(synthesis.provider||"hermes3"))+'</div>';
+    kesimpulanOverlay.hidden = false;
+  }
+  function hideKesimpulan(){ kesimpulanOverlay.hidden = true; }
+
+  // Lets a single PERINTAH box entry like "<topik> Skenario A: <opsi A>
+  // Skenario B: <opsi B> Skenario C: <opsi C>" define all 3 scenario cards
+  // at once, instead of being sent as one literal (and confusing) prompt.
+  function shortLabel(s){
+    s = s.replace(/[.:;,]+$/,"").trim();
+    return s.length > 26 ? s.slice(0,24).trim()+"…" : s;
+  }
+  function parseMultiScenario(text){
+    var re = /skenario\s*a\s*[:\-]?\s*([\s\S]*?)\s*skenario\s*b\s*[:\-]?\s*([\s\S]*?)\s*skenario\s*c\s*[:\-]?\s*([\s\S]*)$/i;
+    var m = text.match(re);
+    if (!m) return null;
+    var partA = m[1].trim(), partB = m[2].trim(), partC = m[3].trim();
+    if (!partA || !partB || !partC) return null;
+    var cut = text.search(/skenario\s*a/i);
+    var baseTopic = text.slice(0, cut).trim();
+    return { baseTopic: baseTopic, parts: [partA, partB, partC] };
+  }
+  function applyCustomScenarios(multi){
+    SCEN_NAMES = multi.parts.map(shortLabel);
+    SCEN_PROMPTS = multi.parts.map(function(part){
+      return multi.baseTopic ? (multi.baseTopic + " — pendekatan: " + part) : part;
+    });
+    scen = 0;
+    renderScenarios();
+    renderStatusline();
+  }
+
+  function runSurvey(customPrompt){
+    if (running) return;
+    var promptText = (customPrompt && customPrompt.trim()) || SCEN_PROMPTS[scen];
+    if (!lunaLive){
+      feed = [{ who:"SURVEI", t:"T+"+day, c:"#f2c46b", msg:"Server Luna tidak terhubung — jalankan `npm start` di komputer untuk survei sungguhan. Menampilkan obrolan simulasi saja." }].concat(feed).slice(0,40);
+      renderFeed();
+      return;
+    }
+    running = true;
+    setBusy(true);
+    hideAskBox();
+    var newsToggle = document.getElementById("news-toggle");
+    var includeNews = Boolean(newsToggle && newsToggle.checked && newsAvailable);
+    feed = [{ who:"SURVEI", t:"T+"+day, c:"#5fd4ff", msg:(includeNews ? "Mencari berita terbaru, lalu mengirim isu ke dewan agent: " : "Mengirim isu ke dewan agent: ")+"“"+promptText+"”..." }].concat(feed).slice(0,40);
+    renderFeed();
+    speechText.textContent = "“" + promptText + "”";
+    logEvent("", "POST /api/council/run — prompt: \""+promptText+"\""+(includeNews ? " (+ live search)" : ""));
+
+    fetch("/api/council/run", {
+      method:"POST", headers:{"Content-Type":"application/json"},
+      body: JSON.stringify({ prompt: promptText, mode: councilMode, includeNews: includeNews })
+    })
+      .then(function(res){ return res.json(); })
+      .then(function(data){
+        if (!data.ok) throw new Error(data.error || "gagal");
+        if (data.newsUsed){
+          feed = [{ who:"BERITA", t:"T+"+day, c:"#f2c46b", msg:data.newsUsed }].concat(feed).slice(0,40);
+          renderFeed();
+          logEvent("ok", "Berita terbaru diambil via 9Router live search.");
+        }
+        var order = data.responses.slice();
+        var neuralSub = document.getElementById("neural-sub");
+        order.forEach(function(p, idx){
+          setTimeout(function(){
+            var color = STANCE_COLOR[p.stance] || "#5fd4ff";
+            feed = [{ who: p.code+" "+p.name, t:(p.provider||"?")+" · T+"+day, c: color, msg: p.take }].concat(feed).slice(0,40);
+            renderFeed();
+            crowdBig.flashRandom(); crowdSmall.flashRandom();
+            neuralGraph.pulse(NEURAL_CHANNEL[p.provider] != null ? NEURAL_CHANNEL[p.provider] : 2);
+            if (neuralSub) neuralSub.textContent = (idx+1)+"/"+order.length+" merespons · "+(p.provider||"?");
+          }, idx * (reduceMotion?0:260));
+        });
+        setTimeout(function(){
+          feed = [{ who:"SINTESIS", t:"T+"+day, c:"#4fe0a0", msg:data.synthesis.text }].concat(feed).slice(0,40);
+          renderFeed();
+          neuralGraph.pulse(3);
+          if (neuralSub) neuralSub.textContent = order.length+" agent selesai · sintesis "+(data.synthesis.provider||"fallback");
+          running = false;
+          setBusy(false);
+          lastPrompt = promptText; lastResponses = data.responses; lastSynthesis = data.synthesis; lastNewsUsed = data.newsUsed;
+          logEvent("ok", (data.responses.length)+" agent merespons, sintesis via "+(data.synthesis.provider||"fallback")+".");
+          if (activeFeedTab === "persona" || activeFeedTab === "sinyal") setFeedTab(activeFeedTab);
+          if (activeGraphTab === "panel" || activeGraphTab === "distribusi") setGraphTab(activeGraphTab);
+          showKesimpulan(promptText, data.synthesis, data.responses, data.newsUsed);
+        }, order.length*(reduceMotion?0:260) + 300);
+      })
+      .catch(function(err){
+        feed = [{ who:"SURVEI", t:"T+"+day, c:"#ff5a6a", msg:"Gagal menghubungi Luna: "+err.message }].concat(feed).slice(0,40);
+        renderFeed();
+        running = false;
+        setBusy(false);
+        logEvent("err", "Gagal: "+err.message);
+      });
+  }
+
+  // ================= wire up buttons =================
+  function togglePause(){ paused = !paused; renderPauseButtons(); }
+  document.getElementById("btn-pause-main").addEventListener("click", togglePause);
+  document.getElementById("btn-pause-console").addEventListener("click", togglePause);
+
+  document.getElementById("btn-event-main").addEventListener("click", function(){ setView("console"); });
+  document.getElementById("btn-survey-main").addEventListener("click", function(){ setView("console"); });
+  document.getElementById("crowd-sec-small").addEventListener("click", function(){ setView("console"); });
+  document.getElementById("btn-back").addEventListener("click", function(){ setView("main"); });
+  document.getElementById("btn-reset").addEventListener("click", function(){ setView("main"); });
+
+  document.getElementById("btn-event-console").addEventListener("click", function(){
+    feed = [{ who:"EVENT PASAR", t:"T+"+day, c:"#f2c46b", msg:"10 toko ditutup sementara. Rata-rata harga naik 12%." }].concat(feed).slice(0,40);
+    renderFeed();
+  });
+  document.getElementById("btn-survey-console").addEventListener("click", function(){ runSurvey(); });
+
+  document.getElementById("btn-perintah-run").addEventListener("click", function(){
+    var text = perintahInput.value.trim();
+    if (!text || running) return;
+    setView("console");
+    var multi = parseMultiScenario(text);
+    perintahInput.value = "";
+    if (multi){
+      applyCustomScenarios(multi);
+      runSurvey();
+      return;
+    }
+    runSurvey(text);
+  });
+  perintahInput.addEventListener("keydown", function(e){
+    if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) btnPerintahRun.click();
+  });
+
+  Array.prototype.forEach.call(document.querySelectorAll("#feed-tabs .ftab"), function(el){
+    el.addEventListener("click", function(){ setFeedTab(el.getAttribute("data-tab")); });
+  });
+  Array.prototype.forEach.call(document.querySelectorAll("#view-tabs .vtab"), function(el){
+    el.addEventListener("click", function(){ setGraphTab(el.getAttribute("data-tab")); });
+  });
+
+  Array.prototype.forEach.call(document.querySelectorAll(".mode-btn"), function(el){
+    el.addEventListener("click", function(){
+      if (running) return;
+      councilMode = el.getAttribute("data-mode");
+      Array.prototype.forEach.call(document.querySelectorAll(".mode-btn"), function(m){
+        m.classList.toggle("active", m === el);
+      });
+      modeHintEl.textContent = MODE_HINTS[councilMode];
+      if (lunaLive) fetchPersonaRoster();
+      renderStats();
+    });
+  });
+
+  document.getElementById("btn-vault-toggle").addEventListener("click", function(){
+    vaultBox.hidden = !vaultBox.hidden;
+    if (!vaultBox.hidden) loadVaultDir(vaultRoot, ".");
+  });
+  Array.prototype.forEach.call(document.querySelectorAll(".vault-tab"), function(el){
+    el.addEventListener("click", function(){
+      Array.prototype.forEach.call(document.querySelectorAll(".vault-tab"), function(t){ t.classList.toggle("active", t === el); });
+      document.getElementById("vault-search-input").value = "";
+      loadVaultDir(el.getAttribute("data-root"), ".");
+    });
+  });
+  document.getElementById("vault-search-input").addEventListener("input", function(){
+    var q = this.value.trim();
+    clearTimeout(vaultSearchTimer);
+    if (!q){ loadVaultDir(vaultRoot, "."); return; }
+    vaultSearchTimer = setTimeout(function(){ runVaultSearch(q); }, 350);
+  });
+
+  // ================= Luna chat — continuous conversation, not one-shot =================
+  function hideAskBox(){ askInput.blur(); }
+  function pendingCouncilSuggestion(q){
+    feed = [{ who:"LUNA → SARAN", t:"T+"+day, c:"#4fe0a0", msg:"Ini kelihatannya butuh dewan lengkap. Klik buat isi PERINTAH: “"+q+"”", chip:true, chipValue:q }].concat(feed).slice(0,40);
+    renderFeed();
+  }
+  function sendAsk(){
+    var q = askInput.value.trim();
+    if (!q || !lunaLive) return;
+    askInput.value = "";
+    askInput.disabled = true;
+    feed = [{ who:"KAMU", t:"T+"+day, c:"#5fd4ff", msg:q }].concat(feed).slice(0,40);
+    renderFeed();
+    logEvent("", "POST /api/chat — \""+q+"\"");
+    fetch("/api/chat", {
+      method:"POST", headers:{"Content-Type":"application/json"},
+      body: JSON.stringify({ message: q })
+    })
+      .then(function(res){ return res.json(); })
+      .then(function(data){
+        if (!data.ok) throw new Error(data.error || "gagal");
+        feed = [{ who:"LUNA", t:"T+"+day, c:"#4fe0a0", msg:data.answer.text }].concat(feed).slice(0,40);
+        renderFeed();
+        logEvent("ok", "Luna menjawab via "+(data.answer.provider||"fallback")+".");
+        if (data.answer.suggestCouncil) pendingCouncilSuggestion(data.answer.suggestCouncil);
+      })
+      .catch(function(err){
+        feed = [{ who:"LUNA", t:"T+"+day, c:"#ff5a6a", msg:"Gagal ngobrol: "+err.message }].concat(feed).slice(0,40);
+        renderFeed();
+        logEvent("err", "Gagal: "+err.message);
+      })
+      .then(function(){ askInput.disabled = false; askInput.focus(); });
+  }
+  document.getElementById("btn-ask-send").addEventListener("click", sendAsk);
+  askInput.addEventListener("keydown", function(e){
+    if (e.key === "Enter" && !e.shiftKey){ e.preventDefault(); sendAsk(); }
+  });
+  document.getElementById("btn-chat-clear").addEventListener("click", function(){
+    fetch("/api/chat/clear", { method:"POST" }).then(function(){
+      feed = [{ who:"LUNA", t:"T+"+day, c:"#5fd4ff", msg:"Obrolan dibersihkan. Mulai lagi kapan saja." }];
+      renderFeed();
+      logEvent("ok", "Histori chat dibersihkan.");
+    });
+  });
+
+  document.getElementById("btn-kesimpulan-close").addEventListener("click", hideKesimpulan);
+  document.getElementById("btn-vault-save").addEventListener("click", function(){
+    var btn = document.getElementById("btn-vault-save");
+    if (!lastSynthesis){ btn.textContent = "Belum ada hasil"; setTimeout(function(){ btn.textContent="💾 SIMPAN KE OBSIDIAN"; }, 1800); return; }
+    btn.textContent = "Menyimpan…";
+    fetch("/api/vault/save", {
+      method:"POST", headers:{"Content-Type":"application/json"},
+      body: JSON.stringify({ prompt:lastPrompt, mode:councilMode, responses:lastResponses, synthesis:lastSynthesis })
+    })
+      .then(function(res){ return res.json(); })
+      .then(function(data){
+        if (!data.ok) throw new Error(data.error||"gagal");
+        btn.textContent = "✓ Tersimpan: "+data.filename;
+        logEvent("ok", "Disimpan ke vault: wiki/"+data.filename);
+      })
+      .catch(function(err){ btn.textContent = "Gagal simpan"; logEvent("err", "Simpan ke vault gagal: "+err.message); })
+      .then(function(){ setTimeout(function(){ btn.textContent="💾 SIMPAN KE OBSIDIAN"; }, 3000); });
+  });
+  kesimpulanOverlay.addEventListener("click", function(e){
+    if (e.target === kesimpulanOverlay) hideKesimpulan();
+  });
+
+  document.addEventListener("keydown", function(e){
+    if (e.key !== "Escape") return;
+    if (!kesimpulanOverlay.hidden) { hideKesimpulan(); return; }
+    setView("main");
+  });
+
+  // ================= voice input (Web Speech API — free, no key) =================
+  function wireMic(buttonId, textareaEl, opts){
+    var btn = document.getElementById(buttonId);
+    if (!btn) return;
+    var SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SR){
+      btn.classList.add("unsupported");
+      btn.title = "Browser ini belum dukung speech recognition. Coba Chrome.";
+      return;
+    }
+    var rec = new SR();
+    rec.lang = "id-ID";
+    rec.continuous = false;
+    rec.interimResults = true;
+    var listening = false;
+    var baseText = "";
+
+    rec.onstart = function(){ listening = true; btn.classList.add("listening"); baseText = textareaEl.value; };
+    rec.onerror = function(){ listening = false; btn.classList.remove("listening"); };
+    rec.onend = function(){ listening = false; btn.classList.remove("listening"); };
+    rec.onresult = function(e){
+      var transcript = "";
+      for (var i = 0; i < e.results.length; i++) transcript += e.results[i][0].transcript;
+      textareaEl.value = (baseText ? baseText + " " : "") + transcript;
+      if (opts && opts.onFinal && e.results[e.results.length - 1].isFinal){
+        opts.onFinal();
+      }
+    };
+    btn.addEventListener("click", function(){
+      if (listening){ rec.stop(); return; }
+      textareaEl.focus();
+      try { rec.start(); } catch (err) { /* already started — ignore */ }
+    });
+  }
+  wireMic("mic-perintah", perintahInput);
+  wireMic("mic-ask", askInput);
+
+  // ================= boot =================
+  renderScenarios();
+  renderPauseButtons();
+  renderMeta();
+  checkLunaHealth();
+})();
+</script>
+</body>
+</html>
