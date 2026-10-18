@@ -443,8 +443,14 @@
   </div>
 </div>
 
+<script type="importmap">
+{ "imports": { "three": "./vendor/three/three.module.min.js" } }
+</script>
 <script type="module">
-import * as THREE from "./vendor/three/three.module.min.js";
+import * as THREE from "three";
+import { GLTFLoader } from "./vendor/three/jsm/loaders/GLTFLoader.js";
+import { KTX2Loader } from "./vendor/three/jsm/loaders/KTX2Loader.js";
+import { MeshoptDecoder } from "./vendor/three/jsm/libs/meshopt_decoder.module.js";
 (function(){
   "use strict";
   var reduceMotion = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -475,167 +481,103 @@ import * as THREE from "./vendor/three/three.module.min.js";
     return function(){ alive = false; io.disconnect(); cancelAnimationFrame(raf); };
   }
 
-  // ================= NL.Holo: 3D particle hologram (Three.js) =================
-  // Same photo-to-particle sampling as before (luminance-weighted, duotone
-  // orange remap), but the particles now live in real 3D space — brighter
-  // (closer) pixels push toward camera, the whole cloud sways/tilts with
-  // the cursor so depth actually parallaxes, and the cloud "reacts": a
-  // slow idle breathing motion, a periodic blink (dimming the estimated
-  // eye band), and a jitter/glow boost while Luna is speaking, driven by
-  // setTalking()/pulseWord() wired to the Web Speech events below.
+  // ================= NL.Holo: rigged 3D face (Three.js + glTF, ARKit blendshapes) =================
+  // Loads a real rigged head (52 ARKit-style morph targets — jaw/mouth
+  // visemes, eye blink, brows) instead of a flat image: the mouth actually
+  // opens/closes and the eyes actually blink in 3D, driven by
+  // setTalking()/pulseWord() wired to the Web Speech events below. Browser
+  // TTS exposes no real viseme/phoneme timing, so the mouth tracks speech
+  // *energy* (how much/how hard she's talking), not exact sounds — true
+  // per-phoneme lip-sync needs a TTS provider that returns viseme
+  // timestamps, which isn't available in this offline setup.
   function initHolo(cv, props){
-    var W = props.w, H = props.h, FY = props.fy != null ? props.fy : .22;
+    var W = props.w, H = props.h;
     var renderer = new THREE.WebGLRenderer({ canvas: cv, antialias: true, alpha: false });
     renderer.setPixelRatio(1);
     renderer.setSize(W, H, false);
     renderer.setClearColor(0x0c0b0a, 1);
+    renderer.outputColorSpace = THREE.SRGBColorSpace;
 
     var scene = new THREE.Scene();
-    var camera = new THREE.PerspectiveCamera(32, W/H, 0.1, 100);
-    camera.position.set(0, 0, 17);
-    camera.lookAt(0, 0, 0);
+    var camera = new THREE.PerspectiveCamera(28, W/H, 0.1, 100);
+
+    var key = new THREE.DirectionalLight(0xfff2e2, 2.1);
+    key.position.set(-0.4, 0.6, 1);
+    scene.add(key);
+    var rim = new THREE.PointLight(0xf97316, 16, 20, 2);
+    rim.position.set(1.3, 0.3, -0.6);
+    scene.add(rim);
+    scene.add(new THREE.HemisphereLight(0x6b5848, 0x120d09, 0.55));
 
     var group = new THREE.Group();
     scene.add(group);
 
-    var geometry = new THREE.BufferGeometry();
-    var BASE_SIZE = 0.046;
-    var material = new THREE.PointsMaterial({ size: BASE_SIZE, vertexColors: true, transparent: true, opacity: .95, sizeAttenuation: true, depthWrite: false });
-    var points = new THREE.Points(geometry, material);
-    group.add(points);
-
     var t0 = performance.now(), stop = function(){};
-    var n = 0, basePos = null, pos = null, baseCol = null, col = null, seed = null, uv = null;
-    var eyeBandLo = .33, eyeBandHi = .43;
     var mouse = { x:0, y:0 };
     var talking = false, talkEnergy = 0, wordKick = 0;
     var blinkAt = reduceMotion ? 1e9 : (2 + Math.random()*3);
+    var head = null, dict = null, infl = null;
 
-    var img = new Image();
-    img.onload = function(){
-      // Upscale the (small) source for finer, luminance-weighted sampling —
-      // the original algorithm's fixed-grid sample assumes a large source
-      // photo; ours is smaller, so we bias sample density toward bright
-      // regions instead, keeping the exact same downstream particle format.
-      var workScale = Math.max(1, 480/img.width);
-      var ow = Math.round(img.width*workScale), oh = Math.round(img.height*workScale);
-      var oc = document.createElement("canvas"); oc.width=ow; oc.height=oh;
-      var o = oc.getContext("2d");
-      o.imageSmoothingEnabled = true;
-      o.drawImage(img,0,0,ow,oh);
-      var d = o.getImageData(0,0,ow,oh).data;
-
-      function sampleAt(px,py){
-        if (px<0||px>=ow||py<0||py>=oh) return null;
-        var i=((py|0)*ow+(px|0))*4;
-        var r=d[i],g=d[i+1],b=d[i+2];
-        return { l:(0.299*r+0.587*g+0.114*b)/255, r:r,g:g,b:b };
-      }
-      // Source has a grey vignette background (brightens toward top/edges),
-      // not black — sample real background points (top strip + side edges,
-      // excluding the bottom third where shoulders sit) and use the
-      // per-channel max as a conservative reference for color-distance exclusion.
-      var bgSamples = [];
-      for (var bx0=0; bx0<ow; bx0+=Math.max(4,(ow/24)|0)) bgSamples.push(sampleAt(bx0,2));
-      for (var by0=0; by0<oh*0.85; by0+=Math.max(4,(oh/24)|0)){ bgSamples.push(sampleAt(2,by0)); bgSamples.push(sampleAt(ow-3,by0)); }
-      var bg = { r:0, g:0, b:0 };
-      bgSamples.forEach(function(c){ if(!c) return; bg.r=Math.max(bg.r,c.r); bg.g=Math.max(bg.g,c.g); bg.b=Math.max(bg.b,c.b); });
-      function saliency(px2){
-        var dr=px2.r-bg.r, dg=px2.g-bg.g, db=px2.b-bg.b;
-        return Math.sqrt(dr*dr+dg*dg+db*db);
-      }
-      var stride=2, totalWeight=0;
-      for (var yy=0; yy<oh; yy+=stride) for (var xx=0; xx<ow; xx+=stride){ var s0=sampleAt(xx,yy); if (s0 && saliency(s0) > 60) totalWeight+=s0.l; }
-      var target = reduceMotion ? 2600 : 11000;
-      var keepFactor = target/(totalWeight||1);
-      // Duotone remap: amber-glow shadows to warm-white highlights, instead
-      // of the source photo's raw hue, to match the brand's orange/ivory look.
-      var DUO_LO = [120,58,20], DUO_MID = [249,115,22], DUO_HI = [255,244,228];
-      function duotone(l){
-        var t = Math.max(0, Math.min(1, l));
-        var a = t < .5 ? t/.5 : (t-.5)/.5;
-        var from = t < .5 ? DUO_LO : DUO_MID, to = t < .5 ? DUO_MID : DUO_HI;
-        return [from[0]+(to[0]-from[0])*a, from[1]+(to[1]-from[1])*a, from[2]+(to[2]-from[2])*a];
-      }
-
-      // Bounding band of salient (face/body) pixels, used to aim the
-      // eye-blink band at roughly the right height for this portrait crop.
-      var minV = 1, maxV = 0;
-      for (var gy0=0; gy0<oh; gy0+=stride){
-        for (var gx0=0; gx0<ow; gx0+=stride){
-          var sp = sampleAt(gx0,gy0);
-          if (sp && saliency(sp) > 60){ var v0=gy0/oh; if (v0<minV) minV=v0; if (v0>maxV) maxV=v0; }
+    var ktx2 = new KTX2Loader();
+    ktx2.setTranscoderPath("./vendor/three/jsm/libs/basis/");
+    ktx2.detectSupport(renderer);
+    var loader = new GLTFLoader();
+    loader.setKTX2Loader(ktx2);
+    loader.setMeshoptDecoder(MeshoptDecoder);
+    loader.load(props.src, function(gltf){
+      var root = gltf.scene;
+      root.traverse(function(o){
+        if (o.isMesh && o.morphTargetDictionary && o.morphTargetInfluences){
+          head = o; dict = o.morphTargetDictionary; infl = o.morphTargetInfluences;
         }
-      }
-      eyeBandLo = minV + (maxV-minV)*0.30;
-      eyeBandHi = minV + (maxV-minV)*0.42;
-
-      var zoom = props.zoom || 1, worldScale = 12.4 * zoom;
-      var tmp = [];
-      for (var gy=0; gy<oh; gy+=stride){
-        for (var gx=0; gx<ow; gx+=stride){
-          var px2 = sampleAt(gx,gy);
-          if (!px2 || saliency(px2) <= 60) continue;
-          var chance = px2.l*keepFactor;
-          var rep = Math.floor(chance);
-          if (Math.random() < (chance-rep)) rep++;
-          var dc = duotone(px2.l);
-          for (var k=0;k<rep;k++){
-            var jx = gx+(Math.random()-0.5)*stride, jy = gy+(Math.random()-0.5)*stride;
-            var u = jx/ow, v = jy/oh;
-            var wx = (u-0.5) * worldScale;
-            var wy = (0.5-v) * worldScale * (oh/ow) + (0.5-FY)*worldScale*0.2;
-            var wz = (px2.l-0.42) * 3.4 + (Math.random()-0.5)*0.3;
-            tmp.push(wx,wy,wz, dc[0]/255,dc[1]/255,dc[2]/255, Math.random()*6.28, u,v);
-          }
+        // Pull the scan toward the brand's warm hologram glow without
+        // losing the facial detail baked into its own texture.
+        if (o.isMesh && o.material && "emissive" in o.material){
+          o.material.emissive = new THREE.Color(0x1a0d04);
+          o.material.emissiveIntensity = 0.5;
         }
-      }
-      n = tmp.length/9;
-      basePos = new Float32Array(n*3); pos = new Float32Array(n*3);
-      baseCol = new Float32Array(n*3); col = new Float32Array(n*3);
-      seed = new Float32Array(n); uv = new Float32Array(n*2);
-      for (var i=0;i<n;i++){
-        var oi = i*9;
-        basePos[i*3]=pos[i*3]=tmp[oi]; basePos[i*3+1]=pos[i*3+1]=tmp[oi+1]; basePos[i*3+2]=pos[i*3+2]=tmp[oi+2];
-        baseCol[i*3]=col[i*3]=tmp[oi+3]; baseCol[i*3+1]=col[i*3+1]=tmp[oi+4]; baseCol[i*3+2]=col[i*3+2]=tmp[oi+5];
-        seed[i]=tmp[oi+6]; uv[i*2]=tmp[oi+7]; uv[i*2+1]=tmp[oi+8];
-      }
-      geometry.setAttribute("position", new THREE.BufferAttribute(pos, 3));
-      geometry.setAttribute("color", new THREE.BufferAttribute(col, 3));
+      });
+      group.add(root);
+
+      var box = new THREE.Box3().setFromObject(root);
+      var size = new THREE.Vector3(); box.getSize(size);
+      var center = new THREE.Vector3(); box.getCenter(center);
+      root.position.sub(center);
+      root.position.y -= size.y * (0.5 - (props.fy != null ? props.fy : .2));
+
+      var fitDist = (size.y * 0.72) / Math.tan(THREE.MathUtils.degToRad(camera.fov/2));
+      camera.position.set(0, size.y*0.06, fitDist * (props.zoom ? 1/props.zoom : 1.18));
+      camera.lookAt(0, size.y*0.06, 0);
+
       stop = gate(cv, draw);
-    };
-    img.src = props.src;
+    }, undefined, function(err){ console.error("NL.Holo: facecap load failed", err); });
+
+    function setMorph(name, v){
+      if (dict && (name in dict)) infl[dict[name]] = v;
+    }
 
     function draw(now){
       var t = (now-t0)/1000;
-      if (!pos){ renderer.render(scene, camera); return; }
-      talkEnergy += ((talking?1:0) - talkEnergy) * 0.08;
-      wordKick *= 0.88;
+      if (!head){ renderer.render(scene, camera); return; }
+      talkEnergy += ((talking?1:0) - talkEnergy) * 0.1;
+      wordKick *= 0.86;
 
       if (!reduceMotion && t > blinkAt) blinkAt = t + 2.6 + Math.random()*3.4;
-      var blinkPhase = reduceMotion ? 0 : Math.max(0, 1 - Math.abs(t-blinkAt+0.09)/0.09);
+      var blinkPhase = reduceMotion ? 0 : Math.max(0, 1 - Math.abs(t-blinkAt+0.08)/0.08);
+      setMorph("eyeBlink_L", blinkPhase);
+      setMorph("eyeBlink_R", blinkPhase);
 
-      group.rotation.y = reduceMotion ? 0 : Math.sin(t*0.35)*0.19 + mouse.x*0.16;
-      group.rotation.x = reduceMotion ? 0 : Math.sin(t*0.24+1.3)*0.05 + mouse.y*0.08;
-      var breathe = reduceMotion ? 0 : Math.sin(t*1.2)*0.012;
+      var mouthEnergy = Math.min(1, talkEnergy*0.8 + wordKick*0.9);
+      var jaw = mouthEnergy * (0.3 + 0.18*Math.sin(t*9.4)) + wordKick*0.18;
+      setMorph("jawOpen", Math.max(0, Math.min(0.55, jaw)));
+      setMorph("mouthFunnel", mouthEnergy*0.1*Math.max(0, Math.sin(t*7.1)));
+      setMorph("browInnerUp", mouthEnergy*0.1);
 
-      var jitter = reduceMotion ? 0 : (0.018 + talkEnergy*0.085 + wordKick*0.15);
-      var glow = 1 + talkEnergy*0.45 + wordKick*0.85;
-      for (var i=0;i<n;i++){
-        var i3 = i*3, ph = seed[i];
-        pos[i3]   = basePos[i3]   + Math.sin(t*1.7+ph)*jitter;
-        pos[i3+1] = basePos[i3+1] + Math.cos(t*1.3+ph*1.3)*jitter*0.7 + basePos[i3+1]*breathe;
-        pos[i3+2] = basePos[i3+2] + Math.sin(t*2.1+ph*0.7)*jitter*0.5;
+      group.rotation.y = reduceMotion ? 0 : Math.sin(t*0.3)*0.15 + mouse.x*0.22;
+      group.rotation.x = reduceMotion ? 0 : Math.sin(t*0.22+1.1)*0.035 + mouse.y*0.08;
+      group.position.y = reduceMotion ? 0 : Math.sin(t*1.1)*0.01;
 
-        var isEye = uv[i*2+1] > eyeBandLo && uv[i*2+1] < eyeBandHi;
-        var dim = isEye ? (1-blinkPhase*0.85) : 1;
-        col[i3]   = Math.min(1, baseCol[i3]   * dim * glow);
-        col[i3+1] = Math.min(1, baseCol[i3+1] * dim * glow);
-        col[i3+2] = Math.min(1, baseCol[i3+2] * dim * glow);
-      }
-      geometry.attributes.position.needsUpdate = true;
-      geometry.attributes.color.needsUpdate = true;
-      material.size = BASE_SIZE * (1 + talkEnergy*0.25 + wordKick*0.5);
+      rim.intensity = 16 + talkEnergy*6 + wordKick*10;
 
       renderer.render(scene, camera);
     }
@@ -854,7 +796,7 @@ import * as THREE from "./vendor/three/three.module.min.js";
   var askInput = document.getElementById("ask-input");
 
   // ================= canvases boot =================
-  var holo = initHolo(document.getElementById("holo-canvas"), { w:760, h:676, zoom:.72, fy:.12, src:"assets/hologram-agent.jpg" });
+  var holo = initHolo(document.getElementById("holo-canvas"), { w:760, h:676, zoom:.72, fy:.12, src:"assets/facecap.glb" });
   var neuralGraph = initNeural(document.getElementById("neural-canvas"), { w:496, h:160 });
   var NEURAL_CHANNEL = { router9:0, ollama:1, groq:2, gemini:2, openrouter:2 };
   var crowdSmall = initCrowd(document.getElementById("crowd-small-canvas"), { w:496, h:380 });
