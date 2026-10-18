@@ -343,7 +343,7 @@
               <span class="btn cyan" id="btn-ask-send">KIRIM</span>
             </div>
           </div>
-          <div class="feed-foot"><span id="feed-live-label">● LIVE · hermes3</span><span id="btn-chat-clear">bersihkan obrolan</span></div>
+          <div class="feed-foot"><span id="feed-live-label">● LIVE · hermes3</span><span><span id="btn-speak-toggle" style="cursor:pointer;margin-right:10px;">🔇 suara: mati</span><span id="btn-chat-clear" style="cursor:pointer;">bersihkan obrolan</span></span></div>
         </div>
       </div>
       <div class="console-bottombar">
@@ -1124,6 +1124,7 @@
       sumberHtml +
       '<div class="kesimpulan-foot">'+(synthesis.simulated ? "sintesis simulasi (tanpa provider)" : "sintesis "+(synthesis.provider||"hermes3"))+'</div>';
     kesimpulanOverlay.hidden = false;
+    speak("Sintesis akhir. " + (synthesis.text || ""));
   }
   function hideKesimpulan(){ kesimpulanOverlay.hidden = true; }
 
@@ -1291,6 +1292,32 @@
     vaultSearchTimer = setTimeout(function(){ runVaultSearch(q); }, 350);
   });
 
+  // ================= Luna bicara (browser TTS, suara Indonesia bila ada) =================
+  var speakOn = false;
+  var idVoice = null;
+  function pickIdVoice(){
+    var vs = window.speechSynthesis ? window.speechSynthesis.getVoices() : [];
+    idVoice = vs.find(function(v){ return /^id/i.test(v.lang) || /Damayanti/i.test(v.name); }) || null;
+  }
+  if (window.speechSynthesis){
+    pickIdVoice();
+    window.speechSynthesis.onvoiceschanged = pickIdVoice;
+  }
+  function speak(text){
+    if (!speakOn || !window.speechSynthesis || !text) return;
+    window.speechSynthesis.cancel();
+    var u = new SpeechSynthesisUtterance(String(text).replace(/[*#>\[\]]/g, " ").slice(0, 900));
+    u.lang = "id-ID";
+    if (idVoice) u.voice = idVoice;
+    u.rate = 1.0;
+    window.speechSynthesis.speak(u);
+  }
+  document.getElementById("btn-speak-toggle").addEventListener("click", function(){
+    speakOn = !speakOn;
+    this.textContent = speakOn ? "🔊 suara: nyala" : "🔇 suara: mati";
+    if (!speakOn && window.speechSynthesis) window.speechSynthesis.cancel();
+  });
+
   // ================= Luna chat — continuous conversation, not one-shot =================
   function hideAskBox(){ askInput.blur(); }
   function pendingCouncilSuggestion(q){
@@ -1315,6 +1342,7 @@
         feed = [{ who:"LUNA", t:"T+"+day, c:"#4fe0a0", msg:data.answer.text }].concat(feed).slice(0,40);
         renderFeed();
         logEvent("ok", "Luna menjawab via "+(data.answer.provider||"fallback")+".");
+        speak(data.answer.text);
         if (data.answer.suggestCouncil) pendingCouncilSuggestion(data.answer.suggestCouncil);
       })
       .catch(function(err){
