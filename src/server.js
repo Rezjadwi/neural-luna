@@ -9,6 +9,7 @@ import { synthesize, askFollowUp, chatReply } from "./synthesizer.js";
 import { getRoster } from "./personas.js";
 import { webSearch } from "./providers/router9.js";
 import { listVault, readVaultFile, saveRunToVault, searchVault } from "./vault.js";
+import { runContentPipeline } from "./content.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PUBLIC_DIR = path.join(__dirname, "..", "public");
@@ -210,6 +211,20 @@ app.post("/api/council/run", async (req, res) => {
     res.json(result);
   } catch (err) {
     console.error("[council/run] failed:", err);
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+app.post("/api/content/run", async (req, res) => {
+  const brief = (req.body?.brief || "").trim();
+  const platform = (req.body?.platform || "Instagram").trim();
+  if (!brief) return res.status(400).json({ ok: false, error: "Missing \"brief\" in request body." });
+
+  try {
+    const result = await runContentPipeline(brief, platform);
+    res.json({ ok: true, ...result });
+  } catch (err) {
+    console.error("[content/run] failed:", err);
     res.status(500).json({ ok: false, error: err.message });
   }
 });
