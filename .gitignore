@@ -1,9 +1,0 @@
-node_modules/
-.env
-*.log
-data/
-tts-env/
-voice/
-design-ref/
-.DS_Store
-.claude/settings.local.json
