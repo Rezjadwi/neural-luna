@@ -1,0 +1,136 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>NEXUS — Proses</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600;700&display=swap">
+<style>
+  :root{
+    --bg:#f3f2ef; --panel:#ffffff; --ink:#15171a; --ink-dim:#6b6f76;
+    --line:#e3e1dc; --accent:#c6372f; --accent-soft:#f6e4e2;
+    --ok:#2f9e5c; --wait:#c8891f;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;min-height:100%;background:var(--bg);}
+  body{font-family:'Inter',sans-serif;color:var(--ink);}
+  .wrap{max-width:900px;margin:0 auto;padding:34px 28px 80px;}
+  .topbar{display:flex;align-items:center;margin-bottom:28px;}
+  .brand{font-weight:800;letter-spacing:3px;font-size:14px;cursor:pointer;}
+  .brand .dot{color:var(--accent);}
+  .back{margin-left:auto;font-size:11px;letter-spacing:1.5px;color:var(--ink-dim);cursor:pointer;}
+  .back:hover{color:var(--ink);}
+
+  h1{font-size:30px;font-weight:800;margin:0 0 6px;letter-spacing:.5px;}
+  .lead{font-size:12.5px;color:var(--ink-dim);margin-bottom:26px;}
+
+  .tabs{display:flex;gap:6px;margin-bottom:20px;}
+  .tab{font-size:11px;letter-spacing:1px;padding:9px 16px;border-radius:20px;cursor:pointer;color:var(--ink-dim);border:1px solid var(--line);background:var(--panel);}
+  .tab.active{color:#fff;background:var(--ink);border-color:var(--ink);}
+
+  .job-list{display:flex;flex-direction:column;gap:10px;}
+  .job{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:16px 18px;}
+  .job-head{display:flex;align-items:center;gap:10px;margin-bottom:6px;}
+  .job-id{font:600 10px/1 'JetBrains Mono',monospace;color:var(--ink-dim);}
+  .job-cat{font-size:9.5px;letter-spacing:1px;color:#fff;background:var(--ink-dim);padding:3px 8px;border-radius:10px;}
+  .job-cat.sales{background:#2f6fa0;}
+  .job-cat.konten{background:#9a4fb0;}
+  .job-cat.umum{background:#6b6f76;}
+  .job-status{margin-left:auto;font-size:10px;letter-spacing:1px;display:flex;align-items:center;gap:6px;}
+  .job-status .led{width:7px;height:7px;border-radius:50%;}
+  .job-status.queued .led{background:var(--ink-dim);}
+  .job-status.processing .led{background:var(--wait);animation:blink 1s infinite;}
+  .job-status.done .led{background:var(--ok);}
+  @keyframes blink{0%,100%{opacity:1;}50%{opacity:.3;}}
+  .job-text{font-size:13.5px;line-height:1.5;margin-bottom:4px;}
+  .job-result{font-size:12px;line-height:1.5;color:var(--ink-dim);border-top:1px dashed var(--line);padding-top:8px;margin-top:8px;}
+  .job-time{font-size:10px;color:#a7a39b;margin-top:6px;}
+
+  .empty{color:#a7a39b;font-size:12.5px;padding:40px 0;text-align:center;}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="topbar">
+    <div class="brand" id="go-home">N<span class="dot">•</span>EXUS</div>
+    <div class="back" id="go-home2">← AGENT UTAMA</div>
+  </div>
+
+  <h1>Proses</h1>
+  <div class="lead">Riwayat & status tugas yang dikerjakan di background, dipisah per kategori.</div>
+
+  <div class="tabs" id="tabs"></div>
+  <div class="job-list" id="job-list"><div class="empty">Memuat…</div></div>
+</div>
+
+<script>
+(function(){
+  "use strict";
+  var CATS = [
+    { id: "all", label: "SEMUA" },
+    { id: "sales", label: "SALES" },
+    { id: "konten", label: "KONTEN" },
+    { id: "umum", label: "UMUM" }
+  ];
+  var active = "all";
+  var tabsEl = document.getElementById("tabs");
+  var listEl = document.getElementById("job-list");
+
+  CATS.forEach(function(c){
+    var el = document.createElement("span");
+    el.className = "tab" + (c.id === active ? " active" : "");
+    el.textContent = c.label;
+    el.dataset.cat = c.id;
+    el.addEventListener("click", function(){
+      active = c.id;
+      Array.prototype.forEach.call(tabsEl.children, function(t){ t.classList.toggle("active", t.dataset.cat === active); });
+      render();
+    });
+    tabsEl.appendChild(el);
+  });
+
+  var jobs = [];
+  function fmtTime(ts){
+    if (!ts) return "";
+    var d = new Date(ts);
+    return d.toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+  }
+  var STATUS_LABEL = { queued: "ANTRE", processing: "DIPROSES", done: "SELESAI" };
+
+  function render(){
+    var filtered = active === "all" ? jobs : jobs.filter(function(j){ return j.category === active; });
+    if (!filtered.length){ listEl.innerHTML = '<div class="empty">Belum ada tugas di kategori ini.</div>'; return; }
+    listEl.innerHTML = filtered.map(function(j){
+      return '<div class="job">'
+        + '<div class="job-head">'
+        + '<span class="job-id">#' + j.id.slice(-6) + '</span>'
+        + '<span class="job-cat ' + j.category + '">' + j.category.toUpperCase() + '</span>'
+        + '<span class="job-status ' + j.status + '"><span class="led"></span>' + STATUS_LABEL[j.status] + '</span>'
+        + '</div>'
+        + '<div class="job-text">' + escapeHtml(j.text) + '</div>'
+        + (j.result ? '<div class="job-result">' + escapeHtml(j.result) + '</div>' : '')
+        + '<div class="job-time">' + fmtTime(j.createdAt) + (j.finishedAt ? ' → selesai ' + fmtTime(j.finishedAt) : '') + '</div>'
+        + '</div>';
+    }).join("");
+  }
+  function escapeHtml(s){
+    var d = document.createElement("div"); d.textContent = s; return d.innerHTML;
+  }
+
+  function load(){
+    fetch("/api/jobs").then(function(r){ return r.json(); }).then(function(data){
+      jobs = data.jobs || [];
+      render();
+    }).catch(function(){
+      listEl.innerHTML = '<div class="empty">Backend tidak terhubung.</div>';
+    });
+  }
+  load();
+  setInterval(load, 2000);
+
+  document.getElementById("go-home").addEventListener("click", function(){ window.location.href = "index.html"; });
+  document.getElementById("go-home2").addEventListener("click", function(){ window.location.href = "index.html"; });
+})();
+</script>
+</body>
+</html>

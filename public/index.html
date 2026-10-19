@@ -118,7 +118,7 @@
 
       <div class="status-chips">
         <div class="chip"><span class="led"></span> <b id="chip-status">SIAP</b></div>
-        <div class="chip"><span class="led" style="background:#a7a39b;"></span> 0 TUGAS AKTIF</div>
+        <div class="chip"><span class="led" style="background:#a7a39b;"></span> <span id="chip-tasks">0 TUGAS AKTIF</span></div>
       </div>
     </div>
 
@@ -301,21 +301,51 @@ import { MeshoptDecoder } from "./vendor/three/jsm/libs/meshopt_decoder.module.j
   }
   if (window.speechSynthesis){ pickIdVoice(); window.speechSynthesis.onvoiceschanged = pickIdVoice; }
 
+  var activeJobs = 0;
+  var chipTasks = document.getElementById("chip-tasks");
+
+  function speakAck(text){
+    if (!window.speechSynthesis){ return; }
+    window.speechSynthesis.cancel();
+    var u = new SpeechSynthesisUtterance(text);
+    u.lang = "id-ID"; if (idVoice) u.voice = idVoice; u.rate = 1.0;
+    u.onstart = function(){ character.setTalking(true); };
+    u.onend = function(){ character.setTalking(false); };
+    u.onboundary = function(){ character.pulseWord(); };
+    window.speechSynthesis.speak(u);
+  }
+
   function respond(text){
-    chipStatus.textContent = "MENGERJAKAN";
-    showToast("Oke, saya kerjakan di background — buka PROSES untuk lihat progress.");
-    if (window.speechSynthesis){
-      window.speechSynthesis.cancel();
-      var u = new SpeechSynthesisUtterance("Oke, saya kerjakan.");
-      u.lang = "id-ID"; if (idVoice) u.voice = idVoice; u.rate = 1.0;
-      u.onstart = function(){ character.setTalking(true); };
-      u.onend = function(){ character.setTalking(false); chipStatus.textContent = "SIAP"; };
-      u.onboundary = function(){ character.pulseWord(); };
-      window.speechSynthesis.speak(u);
-    } else {
-      setTimeout(function(){ chipStatus.textContent = "SIAP"; }, 1200);
-    }
     input.value = "";
+    chipStatus.textContent = "MENGIRIM";
+    fetch("/api/command", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ text: text })
+    }).then(function(r){ return r.json(); }).then(function(data){
+      if (data.error){ showToast("Gagal: " + data.error); chipStatus.textContent = "SIAP"; return; }
+      activeJobs++;
+      chipTasks.textContent = activeJobs + " TUGAS AKTIF";
+      chipStatus.textContent = "SIAP";
+      showToast("Oke, tugas #" + data.job.id.slice(-5) + " (" + data.job.category + ") dikerjakan di background.");
+      speakAck("Oke, saya kerjakan.");
+      pollJob(data.job.id);
+    }).catch(function(){
+      showToast("Backend tidak terhubung.");
+      chipStatus.textContent = "SIAP";
+    });
+  }
+
+  function pollJob(id){
+    var iv = setInterval(function(){
+      fetch("/api/jobs/" + id).then(function(r){ return r.json(); }).then(function(data){
+        if (!data.job || data.job.status === "done"){
+          clearInterval(iv);
+          activeJobs = Math.max(0, activeJobs - 1);
+          chipTasks.textContent = activeJobs + " TUGAS AKTIF";
+        }
+      }).catch(function(){ clearInterval(iv); });
+    }, 1500);
   }
 
   document.getElementById("btn-send").addEventListener("click", function(){
@@ -346,7 +376,7 @@ import { MeshoptDecoder } from "./vendor/three/jsm/libs/meshopt_decoder.module.j
   }
 
   document.getElementById("nav-proses").addEventListener("click", function(){
-    showToast("Halaman Proses belum dibangun di preview ini.");
+    window.location.href = "proses.html";
   });
   document.getElementById("nav-tentang").addEventListener("click", function(){
     showToast("NEXUS — konsol agent kerja pribadi. (placeholder)");
