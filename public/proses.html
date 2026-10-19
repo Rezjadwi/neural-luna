@@ -41,6 +41,8 @@
   .job-status.queued .led{background:var(--ink-dim);}
   .job-status.processing .led{background:var(--wait);animation:blink 1s infinite;}
   .job-status.done .led{background:var(--ok);}
+  .job-status.error .led{background:var(--accent);}
+  .job-result.error{color:var(--accent);}
   @keyframes blink{0%,100%{opacity:1;}50%{opacity:.3;}}
   .job-text{font-size:13.5px;line-height:1.5;margin-bottom:4px;}
   .job-result{font-size:12px;line-height:1.5;color:var(--ink-dim);border-top:1px dashed var(--line);padding-top:8px;margin-top:8px;}
@@ -95,7 +97,7 @@
     var d = new Date(ts);
     return d.toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
   }
-  var STATUS_LABEL = { queued: "ANTRE", processing: "DIPROSES", done: "SELESAI" };
+  var STATUS_LABEL = { queued: "ANTRE", processing: "DIPROSES", done: "SELESAI", error: "GAGAL" };
 
   function render(){
     var filtered = active === "all" ? jobs : jobs.filter(function(j){ return j.category === active; });
@@ -108,7 +110,7 @@
         + '<span class="job-status ' + j.status + '"><span class="led"></span>' + STATUS_LABEL[j.status] + '</span>'
         + '</div>'
         + '<div class="job-text">' + escapeHtml(j.text) + '</div>'
-        + (j.result ? '<div class="job-result">' + escapeHtml(j.result) + '</div>' : '')
+        + (j.result ? '<div class="job-result' + (j.status === "error" ? " error" : "") + '">' + escapeHtml(j.result) + '</div>' : '')
         + '<div class="job-time">' + fmtTime(j.createdAt) + (j.finishedAt ? ' → selesai ' + fmtTime(j.finishedAt) : '') + '</div>'
         + '</div>';
     }).join("");

@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { complete as ollamaComplete } from "./providers/ollama.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const DATA_DIR = path.join(__dirname, "..", "data");
@@ -51,21 +52,34 @@ export function getJob(id) {
   return jobs.find((j) => j.id === id) || null;
 }
 
-// No LLM is configured in this environment yet, so "processing" is a timed
-// stub: it proves the queue -> status -> result pipeline works end to end
-// without pretending to have done real sales/content work. Swapping this
-// for a real agent call is the next step once a provider is wired in.
-function runStub(job) {
-  setTimeout(() => {
-    job.status = "processing";
-    saveJobs(jobs);
-  }, 600);
-  setTimeout(() => {
+const SYSTEM_PROMPT = {
+  sales: "Kamu asisten untuk pimpinan cabang dealer otomotif. Jawab singkat, praktis, dan actionable soal strategi penjualan, promo, target, dan hubungan pelanggan. Bahasa Indonesia.",
+  konten: "Kamu asisten pembuat konten promosi. Bantu buat ide/draft konten (caption, skrip video pendek, konsep visual) yang siap dipakai. Bahasa Indonesia, singkat dan konkret.",
+  umum: "Kamu asisten kerja pribadi serba-bisa. Jawab singkat, praktis, dan to the point. Bahasa Indonesia.",
+};
+
+// Runs the job through the local Ollama model (hermes3) the user has
+// running on their own laptop. This only succeeds when the server process
+// can actually reach OLLAMA_HOST — in a cloud dev sandbox that's nothing,
+// so it fails with a clear "unreachable" error by design; on the user's
+// laptop, where Ollama is running, the same code returns a real answer.
+async function runAgent(job) {
+  job.status = "processing";
+  saveJobs(jobs);
+  try {
+    const reply = await ollamaComplete({
+      system: SYSTEM_PROMPT[job.category] || SYSTEM_PROMPT.umum,
+      user: job.text,
+    });
     job.status = "done";
     job.finishedAt = Date.now();
-    job.result = `[STUB] Belum ada agent asli tersambung. Perintah "${job.text}" sudah tercatat di kategori "${job.category}" — ganti runStub() di src/jobs.js dengan panggilan LLM/agent sungguhan untuk hasil beneran.`;
-    saveJobs(jobs);
-  }, 2200 + Math.random() * 1800);
+    job.result = reply || "(Ollama tidak mengembalikan jawaban.)";
+  } catch (err) {
+    job.status = "error";
+    job.finishedAt = Date.now();
+    job.result = `Gagal menjalankan agent: ${err.message}`;
+  }
+  saveJobs(jobs);
 }
 
 export function createJob(text) {
@@ -80,7 +94,7 @@ export function createJob(text) {
   };
   jobs.push(job);
   saveJobs(jobs);
-  runStub(job);
+  runAgent(job);
   return job;
 }
 
