@@ -1,0 +1,21 @@
+{
+  "name": "agent-console",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Local multi-agent console — a visible, voice/text-interactive front end for a personal work assistant.",
+  "type": "module",
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "node --watch src/server.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "express": "^4.19.2"
+  },
+  "devDependencies": {
+    "three": "^0.160.0"
+  }
+}
